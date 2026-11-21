@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Màu thương hiệu: đổi tại đây để đổi toàn bộ giao diện. */
+  --color-brand: #6d371a;
+  --color-brand-dark: #54290f;
+  --color-brand-soft: #fef3e0;
+  --color-accent: #f99d1c;
+  --color-accent-dark: #e08a0c;
+  --color-ink: #1f1f1f;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-neutral-100 text-ink antialiased;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-base outline-none focus:border-accent focus:ring-2 focus:ring-accent/30;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-neutral-700;
+  }
+  .card {
+    @apply rounded-2xl bg-white p-4 shadow-sm;
+  }
+  .chip {
+    @apply rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium active:bg-neutral-100;
+  }
+  .chip-on {
+    @apply border-brand bg-brand text-white active:bg-brand-dark;
+  }
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold active:bg-neutral-100 disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-brand-dark active:bg-accent-dark;
+  }
+}

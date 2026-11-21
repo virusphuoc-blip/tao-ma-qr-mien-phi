@@ -1,2 +1,84 @@
-# tao-ma-qr-mien-phi
-Tạo Mã QR Miễn Phí – free client-side QR code generator (VietQR, WiFi, vCard...) in Vietnamese
+# Tạo Mã QR Miễn Phí
+
+Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đăng nhập, không quảng cáo, không theo dõi, không máy chủ.
+
+> Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
+> Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
+
+## Tiếng Việt
+
+### Tính năng
+
+- **VietQR chuyển khoản** (tính năng chính): chọn ngân hàng theo danh sách BIN NAPAS (LPBank chọn sẵn), số tài khoản, tên chủ tài khoản, số tiền (không bắt buộc), nội dung. Có nút chọn nhanh 50K / 100K / 200K / 500K / 1M. Xem được chuỗi dữ liệu gốc trong mã.
+- **8 loại mã khác**: website, văn bản, WiFi, gọi điện, SMS, email, danh thiếp vCard, Zalo.
+- **Tùy chỉnh**: màu mã, màu nền, mức sửa lỗi M/Q/H, bo tròn ô, logo ở giữa (logo LPBank hoặc logo của bạn). Có cảnh báo khi nền tối, tương phản thấp hoặc mã quá dày.
+- **Tải về**: PNG 512 / 1024 / 2048 px, SVG, sao chép ảnh, chia sẻ qua Web Share API.
+- **Lịch sử**: lưu trong `localStorage` của máy, bấm để tạo lại hoặc tải lại, có nút xóa.
+- **PWA**: cài được lên màn hình chính, chạy được khi ngoại tuyến.
+
+### Chuẩn VietQR
+
+Chuỗi dữ liệu theo EMVCo / NAPAS 247:
+
+| Trường | Giá trị |
+| --- | --- |
+| `00` | `01` |
+| `01` | `11` (không số tiền) hoặc `12` (có số tiền) |
+| `38` | `00` = `A000000727`, `01` = (`00` BIN + `01` số tài khoản), `02` = `QRIBFTTA` |
+| `53` | `704` (VND) |
+| `54` | số tiền (nếu có) |
+| `58` | `VN` |
+| `62` | `08` = nội dung chuyển khoản, đã bỏ dấu (nếu có) |
+| `63` | CRC-16/CCITT-FALSE |
+
+Tên chủ tài khoản chỉ hiển thị dưới mã, không ghi vào mã: app ngân hàng tự tra tên theo số tài khoản.
+
+Danh sách BIN lấy từ `https://api.vietqr.io/v2/banks` và lưu sẵn trong `src/lib/banks.ts` (ứng dụng không gọi API này khi chạy). **Luôn chuyển thử một số tiền nhỏ trước khi in hoặc gửi mã cho người khác.**
+
+### Chạy trên máy
+
+```bash
+npm install
+npm run dev        # chạy thử
+npm run build      # build vào dist/
+npm run lint
+npm test           # kiểm thử payload, CRC, quét lại mã
+npm run test:e2e   # kiểm thử trên Chrome ở 390px (cần build trước; đặt CHROME_PATH nếu cần)
+```
+
+Đổi màu thương hiệu tại `@theme` trong `src/index.css`.
+
+## English
+
+A free QR code generator in Vietnamese that runs entirely in the browser: no backend, no login, no tracking, no external QR API. Built with React, Vite, TypeScript and Tailwind CSS; installable as a PWA and usable offline.
+
+> This is a free tool and not an official LPBank product. All data is processed in your browser and never sent to a server.
+
+### Features
+
+- **VietQR bank transfer** (main feature): bank picker with NAPAS BIN codes (LPBank preselected), account number, holder name, optional amount with quick presets, optional note. The raw EMVCo payload is shown for transparency.
+- **8 more types**: URL, plain text, WiFi, phone call, SMS, email, vCard, Zalo.
+- **Customisation**: QR colour, background colour, error correction M/Q/H, rounded modules, centre logo (built-in LPBank logo or your own), with warnings for dark backgrounds, low contrast and dense codes.
+- **Export**: PNG at 512 / 1024 / 2048 px, SVG, copy image, Web Share.
+- **History** kept in `localStorage` only, with a clear button.
+
+### VietQR payload
+
+EMVCo format with NAPAS GUID `A000000727` in field 38 (BIN + account, service `QRIBFTTA`), currency `704`, country `VN`, and a CRC-16/CCITT-FALSE checksum in field 63. Notes are stripped of Vietnamese diacritics so every banking app can read them. The holder name is display-only and is not encoded.
+
+The bank list comes from `https://api.vietqr.io/v2/banks` and is bundled in `src/lib/banks.ts`; nothing is fetched at runtime. **Always test a code with a small transfer before printing or sharing it.**
+
+### Development
+
+```bash
+npm install
+npm run dev
+npm run build
+npm run lint
+npm test
+npm run test:e2e   # needs a build first; set CHROME_PATH if Chrome is not found
+```
+
+## License
+
+MIT. The LPBank name and logo belong to their owner and are used only as an optional overlay chosen by the user.
