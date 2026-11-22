@@ -1,3 +1,4 @@
+import { facebookText } from './contact'
 import { attr, canvasBlob, drawQR, loadImage, qrInner, type Logo, type QRModel, type QRStyle } from './render'
 import { onColor, shade } from './styles'
 
@@ -599,10 +600,14 @@ export async function cardPNG(card: Card, model: QRModel, style: QRStyle, logo: 
   return canvasBlob(canvas)
 }
 
-export type BizTemplate = 'lpbank' | 'luxury'
+export type BizTemplate = 'lpbank' | 'luxury' | 'blue' | 'lotus' | 'emerald' | 'silver'
 export const BIZ_TEMPLATES: { id: BizTemplate; label: string }[] = [
   { id: 'lpbank', label: 'LPBank' },
   { id: 'luxury', label: 'Vàng Sang Trọng' },
+  { id: 'blue', label: 'Xanh Dương Doanh Nhân' },
+  { id: 'lotus', label: 'Hồng Sen Nhẹ Nhàng' },
+  { id: 'emerald', label: 'Xanh Ngọc Lục Bảo' },
+  { id: 'silver', label: 'Xám Bạc Tối Giản' },
 ]
 export interface BizInfo {
   name: string
@@ -611,26 +616,111 @@ export interface BizInfo {
   phone: string
   zalo: string
   email: string
+  facebook: string
 }
-export const EMPTY_BIZ: BizInfo = { name: '', title: '', branch: '', phone: '', zalo: '', email: '' }
+export const EMPTY_BIZ: BizInfo = { name: '', title: '', branch: '', phone: '', zalo: '', email: '', facebook: '' }
 export const BIZ_W = 1050
 export const BIZ_H = 600
 
-/** Card visit tỉ lệ 3.5:2. Ô trống không in; không có mã thì không có khung mã. */
-export function layoutBizCard(template: BizTemplate, info: BizInfo, hasQR: boolean, logo?: Logo): Card {
+interface BizTheme {
+  from: string
+  to: string
+  name: string
+  title: string
+  line: string
+  caption: string
+  stroke: string
+  deco: (W: number, H: number) => Node[]
+}
+/** các mẫu card visit trang trí (màu tự chọn, không phải màu thương hiệu) */
+const BIZ_THEMES: Record<Exclude<BizTemplate, 'lpbank'>, BizTheme> = {
+  luxury: {
+    from: '#2E1B0E',
+    to: '#0C0705',
+    name: '#EBCB73',
+    title: '#D4AF37',
+    line: '#F3E3B0',
+    caption: '#6B4E0F',
+    stroke: '#D4AF37',
+    deco: (W, H) => [
+      { t: 'rect', x: 14, y: 14, w: W - 28, h: H - 28, r: 20, fill: 'none', stroke: '#D4AF37', sw: 3 },
+      { t: 'rect', x: 24, y: 24, w: W - 48, h: H - 48, r: 14, fill: 'none', stroke: '#8A6A1E', sw: 1.5 },
+      { t: 'rect', x: 64, y: 84, w: 90, h: 6, r: 3, fill: '#D4AF37' },
+    ],
+  },
+  blue: {
+    from: '#1F56B3',
+    to: '#081B45',
+    name: '#FFFFFF',
+    title: '#9CC7FF',
+    line: '#E6EEFB',
+    caption: '#12397F',
+    stroke: '#5AA9FF',
+    deco: (W, H) => [
+      { t: 'path', d: `M${W - 330} 0H${W - 210}L${W - 470} ${H}H${W - 590}Z`, fill: 'rgba(255,255,255,0.05)' },
+      { t: 'path', d: `M${W - 170} 0H${W - 110}L${W - 370} ${H}H${W - 430}Z`, fill: 'rgba(255,255,255,0.05)' },
+      { t: 'rect', x: 64, y: 84, w: 90, h: 6, r: 3, fill: '#5AA9FF' },
+      { t: 'rect', x: 64, y: H - 46, w: W - 128, h: 2, fill: 'rgba(255,255,255,0.25)' },
+    ],
+  },
+  lotus: {
+    from: '#FFF5F8',
+    to: '#F8C4D6',
+    name: '#9D174D',
+    title: '#D6336C',
+    line: '#4A1D2F',
+    caption: '#9D174D',
+    stroke: '#EC8FB0',
+    deco: (W, H) => [
+      ...[-150, -120, -90, -60, -30].map((deg, i): Node => leaf(150, H + 6, i === 2 ? 190 : i % 2 ? 165 : 130, deg, 'rgba(219,39,119,0.13)')),
+      ...[-140, -90, -40].map((deg): Node => leaf(W - 60, 0, 120, -deg, 'rgba(219,39,119,0.1)')),
+      { t: 'rect', x: 64, y: 84, w: 90, h: 6, r: 3, fill: '#E86A9A' },
+    ],
+  },
+  emerald: {
+    from: '#12805F',
+    to: '#032E20',
+    name: '#F4E3A1',
+    title: '#8FE3C0',
+    line: '#E7F6EF',
+    caption: '#0B5A41',
+    stroke: '#D4AF37',
+    deco: (W, H) => [
+      { t: 'rect', x: 14, y: 14, w: W - 28, h: H - 28, r: 20, fill: 'none', stroke: '#D4AF37', sw: 2.5 },
+      { t: 'path', d: `M0 ${H}L210 ${H - 150}L420 ${H}Z`, fill: 'rgba(255,255,255,0.05)' },
+      { t: 'path', d: `M170 ${H}L340 ${H - 100}L510 ${H}Z`, fill: 'rgba(255,255,255,0.05)' },
+      { t: 'path', d: 'M64 87l12 -12l12 12l-12 12Z', fill: '#D4AF37' },
+      { t: 'rect', x: 98, y: 84, w: 70, h: 6, r: 3, fill: '#D4AF37' },
+    ],
+  },
+  silver: {
+    from: '#FAFAFB',
+    to: '#C5CAD1',
+    name: '#1F2937',
+    title: '#6B7280',
+    line: '#374151',
+    caption: '#374151',
+    stroke: '#9CA3AF',
+    deco: (_W, H) => [
+      { t: 'rect', x: 0, y: 0, w: 22, h: H, fill: '#374151' },
+      { t: 'rect', x: 22, y: 0, w: 6, h: H, fill: '#9CA3AF' },
+      { t: 'rect', x: 64, y: 84, w: 90, h: 6, r: 3, fill: '#374151' },
+    ],
+  },
+}
+
+/** Card visit tỉ lệ 3.5:2. Ô trống không in; caption là các dòng chú thích dưới mã, không có caption thì không có khung mã. */
+export function layoutBizCard(template: BizTemplate, info: BizInfo, caption: string[] | undefined, logo?: Logo): Card {
+  const hasQR = caption !== undefined
   const W = BIZ_W
   const H = BIZ_H
   const nodes: Node[] = []
-  const lux = template === 'luxury'
-  const c = lux
-    ? { name: '#EBCB73', title: '#D4AF37', line: '#F3E3B0', label: '#B9973F', caption: '#6B4E0F' }
-    : { name: '#6D371A', title: '#C97A06', line: INK, label: GRAY, caption: '#6D371A' }
+  const theme = template === 'lpbank' ? undefined : BIZ_THEMES[template]
+  const c = theme ?? { name: '#6D371A', title: '#C97A06', line: INK, caption: '#6D371A', stroke: '#F99D1C' }
   let y: number
-  if (lux) {
-    nodes.push({ t: 'grad', x: 0, y: 0, w: W, h: H, r: 28, from: '#2E1B0E', to: '#0C0705' })
-    nodes.push({ t: 'rect', x: 14, y: 14, w: W - 28, h: H - 28, r: 20, fill: 'none', stroke: '#D4AF37', sw: 3 })
-    nodes.push({ t: 'rect', x: 24, y: 24, w: W - 48, h: H - 48, r: 14, fill: 'none', stroke: '#8A6A1E', sw: 1.5 })
-    nodes.push({ t: 'rect', x: 64, y: 84, w: 90, h: 6, r: 3, fill: '#D4AF37' })
+  if (theme) {
+    nodes.push({ t: 'grad', x: 0, y: 0, w: W, h: H, r: 28, from: theme.from, to: theme.to })
+    nodes.push(...theme.deco(W, H))
     y = 120
   } else {
     nodes.push({ t: 'rect', x: 1, y: 1, w: W - 2, h: H - 2, r: 28, fill: '#FFFFFF', stroke: '#D4D4D4' })
@@ -660,16 +750,20 @@ export function layoutBizCard(template: BizTemplate, info: BizInfo, hasQR: boole
     ['ĐT', v('phone')],
     ['Zalo', v('zalo')],
     ['Email', v('email')],
+    ['Facebook', facebookText(info.facebook)],
   ]
   for (const [label, value] of lines) if (value) text(`${label}: ${value}`, 32, 400, c.line, 18)
   if (hasQR) {
     const size = 270
     const px = W - 64 - size - 40
-    const py = lux ? 96 : 166
-    nodes.push({ t: 'rect', x: px, y: py, w: size + 40, h: size + 84, r: 24, fill: '#FFFFFF', stroke: lux ? '#D4AF37' : '#F99D1C', sw: 3 })
+    const py = theme ? 96 : 166
+    const caps = caption
+    nodes.push({ t: 'rect', x: px, y: py, w: size + 40, h: size + 54 + caps.length * 30, r: 24, fill: '#FFFFFF', stroke: c.stroke, sw: 3 })
     nodes.push({ t: 'qr', x: px + 20, y: py + 20, size })
-    const cap = fit('Quét để chuyển khoản', size, 24, 600)
-    nodes.push({ t: 'text', x: px + 20 + size / 2, y: py + size + 58, text: cap.text, size: cap.size, weight: 600, fill: c.caption, anchor: 'middle' })
+    caps.forEach((line, i) => {
+      const cap = fit(line, size, 24, 600)
+      nodes.push({ t: 'text', x: px + 20 + size / 2, y: py + size + 58 + i * 30, text: cap.text, size: cap.size, weight: 600, fill: c.caption, anchor: 'middle' })
+    })
   }
   return { w: W, h: H, nodes }
 }

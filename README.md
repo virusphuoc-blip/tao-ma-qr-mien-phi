@@ -5,6 +5,12 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.4.0
+
+- **Card visit: chọn loại mã QR** – Chuyển tiền (VietQR, mặc định), Zalo (`https://zalo.me/<id>`), Facebook (ô Facebook mới), Gọi điện (`tel:+84…`). Dưới mã có chú thích theo loại. Lựa chọn bị khóa kèm gợi ý khi ô tương ứng còn trống.
+- **4 mẫu card visit mới** (tổng 6): Xanh Dương Doanh Nhân, Hồng Sen Nhẹ Nhàng, Xanh Ngọc Lục Bảo, Xám Bạc Tối Giản. Màu trang trí, không phải màu thương hiệu.
+- **Thông báo khi mở trong Zalo / Facebook / Messenger:** các trình duyệt nhúng này không tải hình về được, nên đầu trang "Tạo mã" và "Card visit" hiện thông báo (đóng được) kèm cách mở bằng trình duyệt ngoài.
+
 ## Mới ở v1.3.0
 
 - **4 mẫu thẻ QR mới** (tổng 12, cùng mẫu "Chỉ mã QR"): Xanh Lá Thiên Nhiên, Biển Xanh, Tím Hoàng Gia, Trung Thu. Họa tiết vẽ bằng SVG; màu là màu trang trí, không phải màu thương hiệu.

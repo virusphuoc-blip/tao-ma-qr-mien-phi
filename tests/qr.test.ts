@@ -211,7 +211,7 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     const payload = buildVietQR({ bin: '970449', account: '0123456789' })
     const model = buildModel(payload, DEFAULT_STYLE)
     for (const { id } of BIZ_TEMPLATES) {
-      const card = layoutBizCard(id, { ...EMPTY_BIZ, name: 'Võ Hoàng Phước', phone: '0988474228' }, true)
+      const card = layoutBizCard(id, { ...EMPTY_BIZ, name: 'Võ Hoàng Phước', phone: '0988474228' }, ['Quét mã Facebook', 'để liên hệ'])
       expect(card.w / card.h).toBe(3.5 / 2)
       const svg = cardSVG(card, model, DEFAULT_STYLE, undefined, 2100)
       const img = new Resvg(svg).render()
@@ -219,10 +219,44 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
       expect(jsQR(new Uint8ClampedArray(img.pixels), img.width, img.height)?.data, id).toBe(payload)
       expect(svg).toContain('>Võ Hoàng Phước</text>')
       expect(svg).toContain('>ĐT: 0988474228</text>')
-      expect(svg).not.toMatch(/Chi nhánh|Zalo|Email|null|undefined|NaN/)
-      const noQR = cardSVG(layoutBizCard(id, { ...EMPTY_BIZ, name: 'A' }, false), model, DEFAULT_STYLE, undefined, 1050)
+      expect(svg).toContain('>Quét mã Facebook</text>')
+      expect(svg).toContain('>để liên hệ</text>')
+      expect(svg).not.toMatch(/Chi nhánh|Zalo|Email|Facebook:|null|undefined|NaN/)
+      const noQR = cardSVG(layoutBizCard(id, { ...EMPTY_BIZ, name: 'A' }, undefined), model, DEFAULT_STYLE, undefined, 1050)
       expect(noQR).not.toContain('chuyển khoản')
     }
+    expect(BIZ_TEMPLATES.map((t) => t.label)).toEqual(['LPBank', 'Vàng Sang Trọng', 'Xanh Dương Doanh Nhân', 'Hồng Sen Nhẹ Nhàng', 'Xanh Ngọc Lục Bảo', 'Xám Bạc Tối Giản'])
+  })
+
+  it('v1.4: mã liên hệ trên card visit (Zalo, Facebook, gọi điện)', async () => {
+    const { zaloLink, facebookLink, facebookText, telLink } = await import('../src/lib/contact')
+    expect(zaloLink(' 0988 474 228 ').payload).toBe('https://zalo.me/0988474228')
+    expect(zaloLink('https://zalo.me/vhphuoc').payload).toBe('https://zalo.me/vhphuoc')
+    expect(zaloLink('tên có dấu').error).toBeTruthy()
+    expect(facebookLink('vh.phuoc').payload).toBe('https://www.facebook.com/vh.phuoc')
+    expect(facebookLink('@vh.phuoc').payload).toBe('https://www.facebook.com/vh.phuoc')
+    expect(facebookLink('facebook.com/vh.phuoc').payload).toBe('https://facebook.com/vh.phuoc')
+    expect(facebookLink('https://www.facebook.com/profile.php?id=100012345').payload).toBe('https://www.facebook.com/profile.php?id=100012345')
+    expect(facebookLink('http://m.facebook.com/vh.phuoc').payload).toBe('https://m.facebook.com/vh.phuoc')
+    expect(facebookLink('https://example.com/x').error).toBeTruthy()
+    expect(facebookText('https://www.facebook.com/vh.phuoc/')).toBe('facebook.com/vh.phuoc')
+    expect(telLink('0988474228').payload).toBe('tel:+84988474228')
+    expect(telLink('0988.474 228').payload).toBe('tel:+84988474228')
+    expect(telLink('+84 988 474 228').payload).toBe('tel:+84988474228')
+    expect(telLink('84988474228').payload).toBe('tel:+84988474228')
+    expect(telLink('19001234').payload).toBe('tel:19001234')
+    expect(telLink('abc').error).toBeTruthy()
+  })
+
+  it('v1.4: nhận diện trình duyệt trong ứng dụng', async () => {
+    const { isInAppBrowser } = await import('../src/lib/inapp')
+    const chrome = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'
+    expect(isInAppBrowser(chrome)).toBeNull()
+    expect(isInAppBrowser(chrome + ' Zalo android/24100751')).toBe('Zalo')
+    expect(isInAppBrowser(chrome + ' [FB_IAB/FB4A;FBAV/480.0.0.54.88;]')).toBe('Facebook')
+    expect(isInAppBrowser('Mozilla/5.0 (iPhone) [FBAN/FBIOS;FBAV/480.0]')).toBe('Facebook')
+    expect(isInAppBrowser('Mozilla/5.0 (iPhone) [FBAN/MessengerForiOS;FBAV/470.0]')).toBe('Messenger')
+    expect(isInAppBrowser('Mozilla/5.0 (Windows NT 10.0) coc_coc_browser/128.0.0 Chrome/122.0.0.0 Safari/537.36')).toBeNull()
   })
 
   it('số phiên bản: package.json khớp src/version.ts', () => {

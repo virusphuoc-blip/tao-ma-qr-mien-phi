@@ -25,6 +25,7 @@ import CardVisit from './CardVisit'
 import napasMark from './assets/marks/napas247.png'
 import vietqrMark from './assets/marks/vietqr.png'
 import { countDownload, countQR } from './lib/stats'
+import { inAppNotice, isInAppBrowser } from './lib/inapp'
 import { loadDataLogo, loadJSON, saveBlob, saveJSON } from './lib/util'
 
 const BRAND_BROWN = '#6D371A'
@@ -58,6 +59,7 @@ function describe(type: QRType, form: FormData, payload: string): string {
 }
 
 /** iPhone/iPad (iPadOS tự nhận là Mac nhưng có màn hình cảm ứng): Safari tải ảnh vào Tệp chứ không vào Album ảnh */
+const IN_APP = isInAppBrowser()
 const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const ZALO_URL = 'https://zalo.me/0988474228'
 const STAFF_KEY = 'tmqr.staff.v1'
@@ -130,6 +132,7 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory)
   const [bankQuery, setBankQuery] = useState('')
   const [toast, setToast] = useState('')
+  const [inAppOpen, setInAppOpen] = useState(true)
   const toastTimer = useRef<number>(undefined)
   const [choice, setChoice] = useState<CardChoice>(() => {
     const c = loadJSON<CardChoice>(CARD_KEY, { template: 'standard', styleBin: DEFAULT_BIN })
@@ -322,6 +325,19 @@ export default function App() {
           </a>
         ))}
       </nav>
+      {IN_APP && inAppOpen && page !== 'admin' && (
+        <div id="inapp-notice" role="alert" className="mx-3 mt-3 flex items-start gap-2 rounded-xl border-2 border-[#F99D1C] bg-[#FFF4E0] p-3 text-sm text-[#54290F]">
+          <div className="flex-1">
+            <p className="font-semibold">{inAppNotice(IN_APP).text}</p>
+            <p id="inapp-how" className="mt-1">
+              {inAppNotice(IN_APP).how}
+            </p>
+          </div>
+          <button type="button" id="inapp-close" aria-label="Đóng thông báo" className="-mt-1 -mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl font-bold active:bg-[#F99D1C]/30" onClick={() => setInAppOpen(false)}>
+            ×
+          </button>
+        </div>
+      )}
       {page === 'card' && <CardVisit history={history} notify={notify} />}
       {page === 'admin' && <Admin />}
 

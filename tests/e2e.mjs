@@ -231,7 +231,7 @@ assert.equal(await page.locator('#clear-staff').count(), 0)
 log('thông tin cán bộ: còn sau khi tải lại trang, nút Xóa xóa sạch')
 
 const footer = (await page.textContent('footer')).replace(/\s+/g, ' ')
-assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.3.0'))
+assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.0'))
 assert.doesNotMatch(footer, /không phải sản phẩm|Công cụ miễn phí/)
 assert.equal((await page.textContent('#promo')).replace(/\s+/g, ' ').trim(), 'Mở TK LPBank miễn phí: liên hệ ngay VH Phước Zalo 0988474228')
 assert.equal(await page.getAttribute('#promo', 'href'), 'https://zalo.me/0988474228')
@@ -353,18 +353,74 @@ for (const tpl of ['lpbank', 'luxury']) {
   const svg = readFileSync(svgFile, 'utf8')
   assert.equal(decodeSvg(svgFile), r.text)
   for (const t of ['Võ Hoàng Phước', 'Chuyên viên tư vấn', 'Chi nhánh: CN Sài Gòn', 'ĐT: 0988474228']) assert.ok(svg.includes(`>${t}</text>`), `${tpl}: thiếu "${t}"`)
-  assert.doesNotMatch(svg, /Zalo|Email|null|undefined/, tpl + ': ô trống không được in')
+  assert.doesNotMatch(svg, /Zalo|Email|Facebook|null|undefined/, tpl + ': ô trống không được in')
+  assert.ok(svg.includes('>Quét để chuyển khoản</text>'), tpl + ': thiếu chú thích chuyển khoản')
   assert.doesNotMatch(svg, /©|Mở TK|v1\.\d\.\d/)
   log(`card visit ${tpl}: PNG 2100×1200 (3.5:2) + SVG, mã quét ra VietQR đúng CRC, ô trống không in`)
 }
+// v1.4: loại mã QR trên card visit + 4 mẫu mới
+for (const k of ['zalo', 'facebook']) {
+  assert.ok(await page.locator(`[data-bc-kind="${k}"]`).isDisabled(), k + ': ô trống thì lựa chọn phải bị khóa')
+  assert.equal(await page.locator(`[data-bc-hint="${k}"]`).count(), 1)
+}
+assert.ok(await page.locator('[data-bc-kind="call"]').isEnabled())
+assert.equal(await page.locator('[data-bc-hint="call"]').count(), 0)
+await page.fill('#bc-zalo', '0988 474 228')
+await page.fill('#bc-facebook', 'vh.phuoc')
+assert.equal(await page.locator('[data-bc-hint]').count(), 0)
+const VIETQR_CARD = (t) => t.startsWith('000201') && t.includes('0006970449') && t.includes('01100123456789') && t.includes('540550000') && crc16(t.slice(0, -4)) === t.slice(-4)
+const KINDS = {
+  pay: [VIETQR_CARD, ['Quét để chuyển khoản']],
+  zalo: [(t) => t === 'https://zalo.me/0988474228', ['Quét mã Zalo', 'để liên hệ']],
+  facebook: [(t) => t === 'https://www.facebook.com/vh.phuoc', ['Quét mã Facebook', 'để liên hệ']],
+  call: [(t) => t === 'tel:+84988474228', ['Quét mã để gọi điện']],
+}
+const BIZ = ['lpbank', 'luxury', 'blue', 'lotus', 'emerald', 'silver']
+assert.equal(await page.locator('[data-bc-template]').count(), 6)
+let bizDownloads = 0
+for (const tpl of BIZ) {
+  await page.click(`[data-bc-template="${tpl}"]`)
+  for (const [kind, [okPayload, caption]] of Object.entries(KINDS)) {
+    await page.click(`[data-bc-kind="${kind}"]`)
+    assert.equal(await page.locator('#bc-source').count(), kind === 'pay' ? 1 : 0, 'chọn mã từ lịch sử chỉ dành cho loại chuyển tiền')
+    const shown = await page.locator('#bc-preview').innerHTML()
+    for (const line of caption) assert.ok(shown.includes(`>${line}</text>`), `${tpl}/${kind}: xem trước thiếu chú thích "${line}"`)
+    const box = await page.locator('#bc-preview > svg').boundingBox()
+    assert.ok(box.width <= 390 && Math.abs(box.width / box.height - 1.75) < 0.01)
+    const file = await download('#bc-png', 'png')
+    const r = decodePng(file)
+    assert.deepEqual([r.width, r.height], [2100, 1200])
+    assert.ok(okPayload(r.text), `${tpl}/${kind}: PNG quét ra sai: ${r.text}`)
+    const svgFile = await download('#bc-svg', 'svg')
+    const svg = readFileSync(svgFile, 'utf8')
+    assert.equal(decodeSvg(svgFile), r.text)
+    for (const line of caption) assert.ok(svg.includes(`>${line}</text>`), `${tpl}/${kind}: SVG thiếu chú thích`)
+    for (const t of ['Võ Hoàng Phước', 'Chuyên viên tư vấn', 'Chi nhánh: CN Sài Gòn', 'ĐT: 0988474228', 'Zalo: 0988 474 228', 'Facebook: vh.phuoc']) assert.ok(svg.includes(`>${t}</text>`), `${tpl}: thiếu "${t}"`)
+    assert.doesNotMatch(svg, /Email|null|undefined|NaN|…/, tpl + ': ô trống không được in, chữ không bị cắt')
+    bizDownloads += 2
+    copyFileSync(file, `${OUT}/bizcard-${tpl}-${kind}.png`)
+  }
+  log(`card visit ${tpl}: 4 loại mã (chuyển tiền, Zalo, Facebook, gọi điện) PNG + SVG quét đúng payload, có chú thích`)
+}
+await page.screenshot({ path: `${OUT}/bizcard-kinds-390.png`, fullPage: true })
+await page.fill('#bc-phone', '')
+assert.ok(await page.locator('[data-bc-kind="call"]').isDisabled())
+assert.equal(await page.locator('[data-bc-hint="call"]').count(), 1)
+assert.ok(!(await page.locator('#bc-preview').innerHTML()).includes('gọi điện'), 'xóa số điện thoại thì không còn mã gọi điện')
+await page.fill('#bc-phone', '0988474228')
+await page.fill('#bc-zalo', '')
+await page.fill('#bc-facebook', '')
+await page.click('[data-bc-kind="pay"]')
+await page.click('[data-bc-template="luxury"]')
+log('card visit: lựa chọn Zalo/Facebook/Gọi điện bị khóa kèm gợi ý khi ô tương ứng trống')
 await page.selectOption('#bc-source', { index: 1 })
 const fromHistory = decodePng(await download('#bc-png', 'png'))
 assert.ok(fromHistory.text.length > 0 && (await page.locator('#bc-account').count()) === 0)
 await page.screenshot({ path: `${OUT}/bizcard-390.png`, fullPage: true })
 assert.ok((await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0)
 const statsAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('tmqr.stats.v1')))
-assert.equal(statsAfter.cards, 3)
-assert.equal(statsAfter.downloads, statsBefore.downloads + 5)
+assert.ok(statsAfter.cards >= 3 + 24)
+assert.equal(statsAfter.downloads, statsBefore.downloads + 5 + bizDownloads)
 log('card visit: gắn được mã từ lịch sử; đếm 3 card visit')
 await page.click('#nav-qr')
 await page.click('[data-template-btn="standard"]')
@@ -420,14 +476,14 @@ const counters = async () => {
 }
 const c0 = await counters()
 assert.match(await page.textContent('#stat-note'), /chỉ được đếm trên thiết bị này/)
-assert.ok(c0.created >= 10 && c0.downloads > 20 && c0.cards === 3, JSON.stringify(c0))
+assert.ok(c0.created >= 10 && c0.downloads > 20 && c0.cards >= 27, JSON.stringify(c0))
 assert.ok((await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0)
 await page.screenshot({ path: `${OUT}/admin-390.png`, fullPage: true })
 await page.click('#nav-qr')
 await page.fill('#account', '9876543210')
 decodePng(await download('#dl-png', 'png'))
 const c1 = await counters()
-assert.deepEqual(c1, { created: c0.created + 1, downloads: c0.downloads + 1, cards: 3, lpbank: c0.lpbank + 1, vietqr: c0.vietqr + 1 })
+assert.deepEqual(c1, { created: c0.created + 1, downloads: c0.downloads + 1, cards: c0.cards, lpbank: c0.lpbank + 1, vietqr: c0.vietqr + 1 })
 await page.click('#nav-qr')
 await download('#dl-png', 'png')
 const c2 = await counters()
@@ -463,8 +519,61 @@ for (const [name, [userAgent, expected]] of Object.entries(UAS)) {
 }
 log('gợi ý "iPhone: bấm Chia sẻ → Lưu hình ảnh": hiện với iPhone + iPad, không hiện với Android + Windows + máy test')
 
+// 4c2. v1.4: thông báo khi mở bằng trình duyệt trong ứng dụng
+assert.equal(await page.locator('#inapp-notice').count(), 0, 'trình duyệt thường không được hiện thông báo')
+const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'
+const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
+const INAPP = {
+  'Zalo Android': [ANDROID + ' Zalo android/24100751 ZaloTheme/light ZaloLanguage/vi', 'Zalo', 'Mở bằng trình duyệt'],
+  'Zalo iPhone': [IPHONE + ' Zalo iOS/531 ZaloTheme/light ZaloLanguage/vn', 'Zalo', 'Mở bằng trình duyệt'],
+  'Facebook Android': [ANDROID + ' [FB_IAB/FB4A;FBAV/480.0.0.54.88;]', 'Facebook', 'Mở bằng trình duyệt ngoài'],
+  'Facebook iPhone': [IPHONE + ' [FBAN/FBIOS;FBAV/480.0.0.34.108;FBBV/640000000;FBDV/iPhone15,2]', 'Facebook', 'Mở bằng trình duyệt ngoài'],
+  'Messenger iPhone': [IPHONE + ' [FBAN/MessengerForiOS;FBAV/470.0.0.30.103;FBDV/iPhone15,2]', 'Messenger', 'Mở bằng trình duyệt ngoài'],
+  'Messenger Android': [ANDROID + ' [FB_IAB/Orca-Android;FBAV/470.0.0.20.105;]', 'Messenger', 'Mở bằng trình duyệt ngoài'],
+  'Chrome Android': [ANDROID, null],
+  'Safari iPhone': [IPHONE + ' Version/17.5 Safari/604.1', null],
+  'Chrome Windows': ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', null],
+  'Cốc Cốc': ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) coc_coc_browser/128.0.0 Chrome/122.0.0.0 Safari/537.36', null],
+}
+for (const [name, [userAgent, app, how]] of Object.entries(INAPP)) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent, serviceWorkers: 'block' })
+  const p = await ctx.newPage()
+  await p.goto(base)
+  await p.waitForSelector('#nav-qr')
+  if (!app) {
+    for (const nav of ['#nav-qr', '#nav-card', '#nav-admin']) {
+      await p.click(nav)
+      assert.equal(await p.locator('#inapp-notice').count(), 0, name + ': không được hiện thông báo')
+    }
+  } else {
+    for (const nav of ['#nav-card', '#nav-qr']) {
+      await p.click(nav)
+      const mainEl = p.locator(nav === '#nav-card' ? '#page-card' : '#page-qr')
+      await mainEl.waitFor({ state: 'visible' })
+      const main = await mainEl.boundingBox()
+      const notice = (await p.textContent('#inapp-notice')).replace(/\s+/g, ' ')
+      assert.ok(notice.includes(`Bạn đang mở trang bằng trình duyệt ${app} — trình duyệt này không tải hình về được. Hãy mở bằng Chrome hoặc Safari để tải hình về máy.`), name + ': ' + notice)
+      assert.ok((await p.textContent('#inapp-how')).trim().endsWith(`"${how}".`), name + ': sai hướng dẫn')
+      const box = await p.locator('#inapp-notice').boundingBox()
+      assert.ok(box.x >= 0 && box.x + box.width <= 390 && box.y + box.height <= main.y + 1, name + ': thông báo phải nằm trên đầu màn hình, không tràn')
+      assert.ok(parseFloat(await p.locator('#inapp-notice').evaluate((e) => getComputedStyle(e).fontSize)) >= 14)
+      assert.ok((await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0)
+    }
+    await p.click('#nav-admin')
+    await p.locator('#inapp-notice').waitFor({ state: 'detached', timeout: 3000 }) // trang Quản trị không có nút tải nên không hiện
+    await p.click('#nav-qr')
+    await p.locator('#inapp-notice').waitFor({ state: 'visible' })
+    if (name === 'Zalo Android') await p.screenshot({ path: `${OUT}/inapp-zalo-390.png` })
+    if (name === 'Zalo iPhone') assert.equal(await p.locator('#ios-hint').count(), 0) // chưa nhập gì thì chưa có nút tải
+    await p.click('#inapp-close')
+    await p.locator('#inapp-notice').waitFor({ state: 'detached', timeout: 3000 }) // bấm × phải đóng được
+  }
+  await ctx.close()
+}
+log('thông báo trình duyệt trong ứng dụng: hiện với Zalo / Facebook / Messenger (Android + iPhone), đóng được; không hiện với Chrome, Safari, Cốc Cốc')
+
 // 4d. v1.3: footer bản quyền + phiên bản ở mọi màn hình, SEO, sitemap, robots
-const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.3.0'
+const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.0'
 for (const nav of ['#nav-qr', '#nav-card', '#nav-admin']) {
   await page.click(nav)
   assert.ok((await page.textContent('footer')).replace(/\s+/g, ' ').includes(COPY), nav + ': thiếu footer bản quyền')
@@ -490,7 +599,7 @@ assert.equal(sitemap.status, 200)
 const robotsTxt = await robots.text()
 assert.ok(/^User-agent: \*$/m.test(robotsTxt) && /^Allow: \/$/m.test(robotsTxt) && robotsTxt.includes('Sitemap: https://qr.vhphuoc.shop/sitemap.xml'))
 assert.ok((await sitemap.text()).includes('<loc>https://qr.vhphuoc.shop/</loc>') && /xml/.test(sitemap.headers.get('content-type')))
-log('footer bản quyền + v1.3.0 ở cuối cả 3 màn hình; title, mô tả, Open Graph, Twitter Card đúng; robots.txt + sitemap.xml trả 200')
+log('footer bản quyền + v1.4.0 ở cuối cả 3 màn hình; title, mô tả, Open Graph, Twitter Card đúng; robots.txt + sitemap.xml trả 200')
 
 // 5. PWA + riêng tư
 assert.equal(await page.textContent('#app-version'), 'Tạo Mã QR Miễn Phí v' + JSON.parse(readFileSync('package.json', 'utf8')).version)
