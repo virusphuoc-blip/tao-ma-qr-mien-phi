@@ -9,6 +9,7 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 
 - **4 mẫu thẻ QR mới** (tổng 12, cùng mẫu "Chỉ mã QR"): Xanh Lá Thiên Nhiên, Biển Xanh, Tím Hoàng Gia, Trung Thu. Họa tiết vẽ bằng SVG; màu là màu trang trí, không phải màu thương hiệu.
 - Trên iPhone/iPad có dòng gợi ý dưới các nút tải: "iPhone: bấm Chia sẻ → Lưu hình ảnh" (Safari tải ảnh vào Tệp chứ không vào Album ảnh).
+- SEO: meta description, Open Graph, Twitter Card, `sitemap.xml`, `robots.txt`.
 
 ## Mới ở v1.2.1
 

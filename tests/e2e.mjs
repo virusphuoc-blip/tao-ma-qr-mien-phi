@@ -463,6 +463,35 @@ for (const [name, [userAgent, expected]] of Object.entries(UAS)) {
 }
 log('gợi ý "iPhone: bấm Chia sẻ → Lưu hình ảnh": hiện với iPhone + iPad, không hiện với Android + Windows + máy test')
 
+// 4d. v1.3: footer bản quyền + phiên bản ở mọi màn hình, SEO, sitemap, robots
+const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.3.0'
+for (const nav of ['#nav-qr', '#nav-card', '#nav-admin']) {
+  await page.click(nav)
+  assert.ok((await page.textContent('footer')).replace(/\s+/g, ' ').includes(COPY), nav + ': thiếu footer bản quyền')
+  await page.locator('#copyright').scrollIntoViewIfNeeded()
+  assert.ok(await page.locator('#copyright').isVisible(), nav + ': footer không hiển thị')
+  const box = await page.locator('footer').boundingBox()
+  const docH = await page.evaluate(() => document.documentElement.scrollHeight - window.scrollY)
+  assert.ok(Math.abs(box.y + box.height - docH) < 2, nav + ': footer phải ở cuối trang')
+}
+await page.click('#nav-qr')
+assert.equal(await page.title(), 'Tạo Mã QR Miễn Phí')
+const meta = (sel) => page.getAttribute(sel, 'content')
+const desc = await meta('meta[name="description"]')
+for (const w of ['mã QR', 'VietQR', 'miễn phí', 'chuyển khoản ngân hàng', 'LPBank', 'card visit', 'PNG/SVG']) assert.ok(desc.includes(w), 'mô tả thiếu: ' + w)
+assert.equal(await meta('meta[property="og:site_name"]'), 'Tạo Mã QR Miễn Phí')
+assert.equal(await meta('meta[property="og:description"]'), desc)
+assert.equal(await meta('meta[name="twitter:description"]'), desc)
+assert.equal(await meta('meta[name="twitter:card"]'), 'summary')
+const robots = await fetch(base + '/robots.txt')
+const sitemap = await fetch(base + '/sitemap.xml')
+assert.equal(robots.status, 200)
+assert.equal(sitemap.status, 200)
+const robotsTxt = await robots.text()
+assert.ok(/^User-agent: \*$/m.test(robotsTxt) && /^Allow: \/$/m.test(robotsTxt) && robotsTxt.includes('Sitemap: https://qr.vhphuoc.shop/sitemap.xml'))
+assert.ok((await sitemap.text()).includes('<loc>https://qr.vhphuoc.shop/</loc>') && /xml/.test(sitemap.headers.get('content-type')))
+log('footer bản quyền + v1.3.0 ở cuối cả 3 màn hình; title, mô tả, Open Graph, Twitter Card đúng; robots.txt + sitemap.xml trả 200')
+
 // 5. PWA + riêng tư
 assert.equal(await page.textContent('#app-version'), 'Tạo Mã QR Miễn Phí v' + JSON.parse(readFileSync('package.json', 'utf8')).version)
 const manifest = await (await fetch(base + '/manifest.webmanifest')).json()

@@ -10,7 +10,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
-      workbox: { globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'] },
+      workbox: { globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'], navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/] },
       manifest: {
         name: 'Tạo Mã QR Miễn Phí',
         short_name: 'Tạo Mã QR',
