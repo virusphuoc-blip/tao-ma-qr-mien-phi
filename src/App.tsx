@@ -120,7 +120,6 @@ function cardInput(choice: CardChoice, brandLogo: Logo | undefined, type: QRType
     title: bank && form.name.trim() ? form.name.trim().toUpperCase() : undefined,
     subtitle: bank ? `${bank.shortName} · ${form.account}` : undefined,
     amount: bank && form.amount ? formatVnd(form.amount) + ' đ' : undefined,
-    staffBank: bank?.shortName ?? brand.name,
     staff,
   }
 }
@@ -598,7 +597,7 @@ export default function App() {
           </div>
           <div>
             <div className="flex items-center justify-between">
-              <span className="label">Thông tin cán bộ phụ trách</span>
+              <span className="label">Nhân viên hỗ trợ (in trên thẻ)</span>
               {hasStaff && (
                 <button type="button" id="clear-staff" className="text-sm font-medium text-brand" onClick={() => setStaff(EMPTY_STAFF)}>
                   Xóa
@@ -746,8 +745,7 @@ export default function App() {
       </a>
 
       <footer className="px-4 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-neutral-600">
-        <p className="font-medium">Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.</p>
-        <p className="mt-1">Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.</p>
+        <p>Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.</p>
         <p id="copyright" className="mt-2">
           © 2026 VH Phước. Mọi nội dung thuộc về VH Phước.{' '}
           <span id="app-version" className="whitespace-nowrap">

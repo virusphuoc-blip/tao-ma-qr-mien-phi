@@ -160,10 +160,11 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
   })
 
   it('dòng cán bộ: bỏ trường trống, không có trường nào thì không có dòng nào', () => {
-    expect(staffLines('Sacombank', { branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' })).toEqual(['Sacombank – CN Sài Gòn', 'Trần Thị B · 0901234567'])
-    expect(staffLines('Sacombank', { branch: '', name: 'Trần Thị B', phone: '' })).toEqual(['Sacombank', 'Trần Thị B'])
-    expect(staffLines('Sacombank', { branch: 'CN Sài Gòn', name: '', phone: ' ' })).toEqual(['Sacombank – CN Sài Gòn'])
-    expect(staffLines('Sacombank', { branch: ' ', name: '', phone: '' })).toEqual([])
+    expect(staffLines({ branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' })).toEqual(['NV hỗ trợ: Trần Thị B — CN Sài Gòn — 0901234567'])
+    expect(staffLines({ branch: '', name: 'Trần Thị B', phone: '' })).toEqual(['NV hỗ trợ: Trần Thị B'])
+    expect(staffLines({ branch: 'CN Sài Gòn', name: '', phone: ' 0901234567 ' })).toEqual(['NV hỗ trợ: CN Sài Gòn — 0901234567'])
+    expect(staffLines({ branch: ' ', name: '', phone: '' })).toEqual([])
+    expect(staffLines({ branch: 'Chi nhánh Thành phố Hồ Chí Minh – PGD Bến Thành', name: 'Nguyễn Hoàng Thị Phương Thảo', phone: '0901234567' }, 860, 26)).toHaveLength(2)
   })
 
   it('cả 4 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
@@ -172,10 +173,18 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     const brand = { name: 'Sacombank', primary: '#0065A4', accent: '#F3B643' }
     for (const { id } of TEMPLATES.filter((t) => t.id !== 'plain')) {
       for (const staff of [{ branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' }, { branch: '', name: '', phone: '' }]) {
-        const svg = cardSVG(layoutCard({ template: id, brand, subtitle: 'Sacombank · 0123456789', staffBank: 'Sacombank', staff }), model, DEFAULT_STYLE, undefined, 800)
+        const svg = cardSVG(layoutCard({ template: id, brand, subtitle: 'Sacombank · 0123456789', staff }), model, DEFAULT_STYLE, undefined, 800)
         const img = new Resvg(svg).render()
         expect(jsQR(new Uint8ClampedArray(img.pixels), img.width, img.height)?.data, id).toBe(payload)
-        expect(svg.includes('Trần Thị B · 0901234567'), id).toBe(!!staff.name)
+        expect(svg.includes('>NV hỗ trợ: Trần Thị B — CN Sài Gòn — 0901234567</text>'), id).toBe(!!staff.name)
+        expect(svg.includes('NV hỗ trợ'), id).toBe(!!staff.name)
+        const sizes = (re: RegExp) => [...svg.matchAll(re)].map((m) => Number(m[1]))
+        const bodySize = Math.max(...sizes(/font-size="(\d+)"[^>]*>Sacombank · 0123456789</g))
+        if (staff.name) {
+          const ratio = sizes(/font-size="(\d+)"[^>]*>NV hỗ trợ/g)[0] / bodySize
+          expect(ratio, id).toBeGreaterThanOrEqual(0.6)
+          expect(ratio, id).toBeLessThanOrEqual(0.7)
+        }
         expect(svg).not.toMatch(/null|undefined|NaN/)
       }
     }

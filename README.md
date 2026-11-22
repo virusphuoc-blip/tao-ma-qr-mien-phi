@@ -5,6 +5,11 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.1.1
+
+- Thông tin nhân viên in trên thẻ thành một dòng nhỏ "NV hỗ trợ: Tên — Chi nhánh — SĐT" (65% cỡ chữ nội dung thẻ).
+- Footer trang chỉ còn ghi chú riêng tư, dòng bản quyền và số phiên bản.
+
 ## Mới ở v1.1.0
 
 - **Phong cách theo ngân hàng**: chọn ngân hàng nhận thì giao diện và thẻ QR tự đổi sang màu + logo ngân hàng đó (đổi tay được ở mục "Phong cách"). 52 tổ chức có màu/logo lấy từ website chính thức (xem `src/lib/styles.ts`, trường `source`); 24 tổ chức chưa xác minh được dùng kiểu xanh đậm trung tính, không logo.
