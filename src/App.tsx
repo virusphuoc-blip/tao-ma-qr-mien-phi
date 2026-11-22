@@ -20,6 +20,7 @@ import { BANK_STYLES, styleOf, themeVars } from './lib/styles'
 import { toTransferContent } from './lib/vietqr'
 import { APP_NAME, APP_VERSION } from './version'
 import Admin from './Admin'
+import { FULL_NAMES } from './lib/fullnames'
 import CardVisit from './CardVisit'
 import napasMark from './assets/marks/napas247.png'
 import vietqrMark from './assets/marks/vietqr.png'
@@ -82,7 +83,7 @@ function cardInput(choice: CardChoice, brandLogo: Logo | undefined, type: QRType
   const bank = type === 'vietqr' ? BANKS.find((b) => b.bin === form.bin) : undefined
   return {
     template: choice.template,
-    brand: { name: brand.name, primary: brand.primary, accent: brand.accent, logo: brandLogo, tagline: brand.bin === DEFAULT_BIN ? LPBANK_TAGLINE : undefined },
+    brand: { name: brand.name, primary: brand.primary, accent: brand.accent, logo: brandLogo, tagline: brand.bin === DEFAULT_BIN ? LPBANK_TAGLINE : undefined, fullName: FULL_NAMES[brand.code]?.name },
     account: bank ? form.account : undefined,
     marks: bank ? marks : undefined,
     title: bank && form.name.trim() ? form.name.trim().toUpperCase() : undefined,

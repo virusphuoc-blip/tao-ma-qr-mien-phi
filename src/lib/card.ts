@@ -24,7 +24,7 @@ export const EMPTY_STAFF: Staff = { branch: '', name: '', phone: '' }
 
 export interface CardInput {
   template: Template
-  brand: { name: string; primary: string; accent: string; logo?: Logo; tagline?: string }
+  brand: { name: string; primary: string; accent: string; logo?: Logo; tagline?: string; fullName?: string }
   /** số tài khoản (mẫu Cây Vàng in ở đầu khung mã) */
   account?: string
   /** logo VietQR + napas 247, chỉ dùng cho mã chuyển khoản */
@@ -290,7 +290,17 @@ export function layoutCard(input: CardInput): Card {
       nodes.push({ t: 'rect', x: cx - l.w / 2 - 36, y, w: l.w + 72, h: 140, r: 32, fill: '#FFFFFF' })
       nodes.push({ t: 'img', x: cx - l.w / 2, y: y + 70 - l.h / 2, w: l.w, h: l.h, src: brand.logo.src })
       y += 140 + 26
-      text(brand.name, cx, 46, 700, on, 'middle', 840, 0.5)
+      const name = brand.fullName ?? brand.name
+      const words = name.split(' ')
+      if (measure(name, 37, 700) <= 840 || words.length < 4) text(name, cx, 46, 700, on, 'middle', 840, 0.5)
+      else {
+        // tên đầy đủ quá dài: tách hai dòng gần bằng nhau thay vì thu chữ quá nhỏ
+        let cut = 1
+        for (let i = 1; i < words.length; i++)
+          if (Math.abs(measure(words.slice(0, i).join(' '), 40, 700) - measure(name, 40, 700) / 2) < Math.abs(measure(words.slice(0, cut).join(' '), 40, 700) - measure(name, 40, 700) / 2)) cut = i
+        text(words.slice(0, cut).join(' '), cx, 40, 700, on, 'middle', 840, 0.3)
+        text(words.slice(cut).join(' '), cx, 40, 700, on, 'middle', 840, 0.5)
+      }
     } else {
       y += 20
       text(brand.name, cx, 76, 700, on, 'middle', 840, 0.5)

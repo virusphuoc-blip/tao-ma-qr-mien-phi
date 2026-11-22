@@ -5,6 +5,10 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.2.1
+
+- Dòng dưới logo trên các mẫu thẻ nền màu ghi tên tiếng Việt đầy đủ của ngân hàng (LPBank: "Ngân hàng TMCP Lộc Phát Việt Nam") thay cho tên ngắn. Chỉ áp dụng cho tên đã đối chiếu trên website chính thức (`src/lib/fullnames.ts`); còn lại giữ tên ngắn.
+
 ## Mới ở v1.2.0
 
 - **4 mẫu thẻ QR mới** (tổng 8, cùng mẫu "Chỉ mã QR"): Cây Vàng Lộc Phát, Vàng Sang Trọng, Gradient Hiện Đại, Tết Lộc Phát. Cây vàng, đồng tiền, đèn lồng đều vẽ bằng SVG, không dùng ảnh chụp.

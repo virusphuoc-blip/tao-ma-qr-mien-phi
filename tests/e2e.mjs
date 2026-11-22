@@ -231,7 +231,7 @@ assert.equal(await page.locator('#clear-staff').count(), 0)
 log('thông tin cán bộ: còn sau khi tải lại trang, nút Xóa xóa sạch')
 
 const footer = (await page.textContent('footer')).replace(/\s+/g, ' ')
-assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.2.0'))
+assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.2.1'))
 assert.doesNotMatch(footer, /không phải sản phẩm|Công cụ miễn phí/)
 assert.equal((await page.textContent('#promo')).replace(/\s+/g, ' ').trim(), 'Mở TK LPBank miễn phí: liên hệ ngay VH Phước Zalo 0988474228')
 assert.equal(await page.getAttribute('#promo', 'href'), 'https://zalo.me/0988474228')
@@ -279,6 +279,18 @@ for (const tpl of ['tree', 'luxury', 'gradient', 'tet']) {
   assert.ok(ratio >= 0.6 && ratio <= 0.7, `${tpl}: chữ NV hỗ trợ phải bằng 60–70% chữ nội dung (đang ${ratio})`)
   assert.doesNotMatch(svg, PAGE_ONLY)
   assert.doesNotMatch(svg, /href="(?!data:)/, tpl + ': thẻ không được tham chiếu tệp ngoài')
+  if (tpl !== 'tree') {
+    // v1.2.1: dòng dưới logo LPBank là tên đầy đủ, một dòng, không bị cắt, nằm gọn trong thẻ
+    const m = /<text x="500"[^>]*font-size="(\d+)"[^>]*>Ngân hàng TMCP Lộc Phát Việt Nam<\/text>/.exec(svg)
+    assert.ok(m && Number(m[1]) >= 36, tpl + ': thiếu dòng "Ngân hàng TMCP Lộc Phát Việt Nam" dưới logo')
+    assert.ok(!svg.includes('>LPBank</text>'), tpl + ': còn dòng "LPBank" dưới logo')
+    const w = await page.evaluate(() => {
+      const t = [...document.querySelectorAll('#qr-preview > svg text')].find((e) => e.textContent === 'Ngân hàng TMCP Lộc Phát Việt Nam')
+      const r = t.getBoundingClientRect(), c = t.ownerSVGElement.getBoundingClientRect()
+      return [r.left - c.left, c.right - r.right, r.height]
+    })
+    assert.ok(w[0] > 8 && w[1] > 8 && w[2] >= 11, tpl + ': tên đầy đủ không vừa thẻ ở 390px ' + w)
+  }
   if (tpl === 'tree') {
     assert.ok(full.width > full.height, 'mẫu Cây Vàng phải nằm ngang')
     assert.ok(svg.includes('>NGÂN HÀNG LỘC PHÁT VIỆT NAM</text>'))
@@ -295,6 +307,25 @@ for (const tpl of ['tree', 'luxury', 'gradient', 'tet']) {
   assert.ok(full.height > empty.height + 20, tpl + ': thẻ có NV hỗ trợ phải cao hơn')
   log(`mẫu ${tpl}: xem trước ở 390px, PNG + SVG quét đúng payload, "NV hỗ trợ:" cỡ ${Math.round(ratio * 100)}%; bỏ trống thì không có (cao ${full.height} → ${empty.height}px)`)
 }
+await page.click('[data-template-btn="bank"]')
+assert.equal(decodePng(await download('#dl-png', 'png')).text, lp)
+const bankLp = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
+assert.ok(bankLp.includes('>Ngân hàng TMCP Lộc Phát Việt Nam</text>') && !bankLp.includes('>LPBank</text>'))
+copyFileSync(await download('#dl-png', 'png'), `${OUT}/card-bank-lpbank.png`)
+await page.screenshot({ path: `${OUT}/lpbank-390.png`, fullPage: true })
+await page.selectOption('#bank', '970403')
+const bankStb = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
+assert.ok(bankStb.includes('>Ngân hàng TMCP Sài Gòn Tài Lộc</text>') && !bankStb.includes('>Sacombank</text>') && !bankStb.includes('Lộc Phát'), 'Sacombank phải hiện tên đầy đủ')
+await page.selectOption('#bank', '970405')
+const vba = await download('#dl-png', 'png')
+copyFileSync(vba, `${OUT}/card-bank-agribank.png`)
+assert.ok(decodePng(vba).text.includes('0006970405'))
+const bankVba = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
+assert.ok(bankVba.includes('>Ngân hàng Nông nghiệp và</text>') && bankVba.includes('>Phát triển Nông thôn Việt Nam</text>'), 'tên dài phải tách hai dòng')
+await page.selectOption('#bank', '970418')
+assert.ok(readFileSync(await download('#dl-svg', 'svg'), 'utf8').includes('>BIDV</text>'), 'chưa xác minh tên đầy đủ thì giữ tên ngắn')
+await page.selectOption('#bank', '970449')
+log('v1.2.1: mẫu Thẻ ngân hàng + LPBank: dòng dưới logo là "Ngân hàng TMCP Lộc Phát Việt Nam", PNG quét đúng payload; Sacombank hiện tên đầy đủ, Agribank tách hai dòng, BIDV giữ tên ngắn')
 await page.click('[data-template-btn="tree"]')
 await page.selectOption('#bank', '970403')
 const treeStb = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
@@ -365,9 +396,10 @@ assert.ok(overflow <= 0, 'tràn ngang ' + overflow)
 log('không tràn ngang ở 390px')
 
 // 4. Lịch sử
-assert.equal(await page.locator('#history li').count(), 10)
+const saved = await page.locator('#history li').count()
+assert.ok(saved >= 10)
 await page.reload()
-assert.equal(await page.locator('#history li').count(), 10)
+assert.equal(await page.locator('#history li').count(), saved)
 await page.click('#history li:last-child button:first-child')
 assert.equal(await payload(), vietqr)
 assert.equal(decodePng(await download('#history li:last-child button:last-child', 'png')).text, vietqr)
@@ -375,7 +407,7 @@ page.once('dialog', (d) => d.accept())
 await page.click('#clear-history')
 assert.equal(await page.locator('#history li').count(), 0)
 assert.equal(await page.evaluate(() => localStorage.getItem('tmqr.history.v1')), null)
-log('lịch sử: lưu 10 mục, còn sau khi tải lại trang, tạo lại + tải lại được, xóa sạch')
+log(`lịch sử: lưu ${saved} mục, còn sau khi tải lại trang, tạo lại + tải lại được, xóa sạch`)
 
 // 4b. v1.2: trang Quản trị
 const counters = async () => {
