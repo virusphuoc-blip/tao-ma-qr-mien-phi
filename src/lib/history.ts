@@ -1,3 +1,4 @@
+import type { Template } from './card'
 import type { FormData, QRType } from './payloads'
 import type { QRStyle } from './render'
 
@@ -8,6 +9,7 @@ export interface HistoryItem {
   label: string
   form: FormData
   style: QRStyle
+  card?: { template: Template; styleBin: string }
 }
 
 const KEY = 'tmqr.history.v1'

@@ -4,11 +4,12 @@ import { Resvg } from '@resvg/resvg-js'
 import jsQR from 'jsqr'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 import { PNG } from 'pngjs'
 
 const OUT = 'test-results'
+rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 let server
 let base = process.env.BASE_URL
@@ -93,13 +94,17 @@ log('VietQR: payload đúng từng trường + CRC-16 ' + vietqr.slice(-4))
 for (const size of [512, 1024, 2048]) {
   await page.click(`[data-size="${size}"]`)
   const r = decodePng(await download('#dl-png', 'png'))
-  assert.deepEqual(r, { width: size, height: size, text: vietqr })
+  assert.equal(r.width, size)
+  assert.ok(r.height > size, 'thẻ Chuẩn phải cao hơn mã QR')
+  assert.equal(r.text, vietqr)
   log(`tải PNG ${size}px: tệp hợp lệ, quét lại ra đúng payload`)
 }
 assert.equal(decodeSvg(await download('#dl-svg', 'svg')), vietqr)
 log('tải SVG: tệp hợp lệ, quét lại ra đúng payload')
 
-// tùy chỉnh
+// tùy chỉnh (mẫu "Chỉ mã QR" = ảnh vuông như bản 1.0)
+await page.click('[data-template-btn="plain"]')
+assert.deepEqual(decodePng(await download('#dl-png', 'png')), { width: 2048, height: 2048, text: vietqr })
 await page.click('text=Nâu LPBank')
 await page.check('#rounded')
 await page.click('[data-logo="lpbank"]')
@@ -132,6 +137,118 @@ const clip = await page.evaluate(async () => (await navigator.clipboard.read())[
 assert.deepEqual(clip, ['image/png'])
 log('sao chép ảnh: clipboard có image/png')
 
+// 1b. v1.1: phong cách ngân hàng, mẫu thẻ, thông tin cán bộ, banner + footer
+const cssVar = (name) => page.evaluate((n) => document.documentElement.style.getPropertyValue(n), name)
+const near = (file, hex, tol = 12) => {
+  const png = PNG.sync.read(readFileSync(file))
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  let count = 0
+  for (let i = 0; i < png.data.length; i += 4)
+    if (png.data[i + 3] > 200 && Math.abs(png.data[i] - r) + Math.abs(png.data[i + 1] - g) + Math.abs(png.data[i + 2] - b) <= tol) count++
+  return count / (png.width * png.height)
+}
+const PAGE_ONLY = /VH Phước|Zalo|0988474228|©|Mở TK|v1\.1\.0|không phải sản phẩm/
+assert.equal(await page.inputValue('#style-bank'), '970449')
+assert.equal(await cssVar('--color-brand'), '#6D371A')
+assert.equal(await cssVar('--color-accent'), '#F99D1C')
+await page.selectOption('#bank', '970436')
+assert.equal(await page.inputValue('#style-bank'), '970436')
+assert.equal(await cssVar('--color-brand'), '#00512A')
+await page.selectOption('#bank', '970403')
+assert.equal(await page.inputValue('#style-bank'), '970403')
+assert.equal(await cssVar('--color-brand'), '#0065A4')
+assert.equal(await cssVar('--color-accent'), '#F3B643')
+await page.selectOption('#style-bank', '970422')
+assert.equal(await page.inputValue('#bank'), '970403')
+assert.equal(await cssVar('--color-brand'), '#141ED2')
+await page.selectOption('#style-bank', '970403')
+log('phong cách: mặc định LPBank, tự đổi theo ngân hàng nhận, đổi tay được mà không đổi ngân hàng nhận')
+
+const stb = await payload()
+assert.equal(stb, vietqr.replace('970449', '970403').slice(0, -4) + crc16(vietqr.replace('970449', '970403').slice(0, -4)))
+await page.click('[data-size="1024"]')
+const staffFull = { branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' }
+const fillStaff = async (v) => {
+  for (const k of ['branch', 'name', 'phone']) await page.fill('#staff-' + k, v[k] ?? '')
+}
+const heights = {}
+for (const tpl of ['standard', 'bank', 'minimal', 'business']) {
+  await page.click(`[data-template-btn="${tpl}"]`)
+  await fillStaff(staffFull)
+  assert.equal(await payload(), stb, 'thông tin cán bộ không được nằm trong payload')
+  const png = await download('#dl-png', 'png')
+  copyFileSync(png, `${OUT}/card-${tpl}.png`)
+  const full = decodePng(png)
+  assert.equal(full.text, stb)
+  assert.equal(full.width, 1024)
+  const svgFile = await download('#dl-svg', 'svg')
+  const svg = readFileSync(svgFile, 'utf8')
+  assert.equal(decodeSvg(svgFile), stb)
+  assert.ok(svg.includes('>Sacombank – CN Sài Gòn</text>'), tpl + ': thiếu dòng ngân hàng + chi nhánh')
+  assert.ok(svg.includes('>Trần Thị B · 0901234567</text>'), tpl + ': thiếu dòng tên + số điện thoại')
+  assert.ok(svg.indexOf('Sacombank – CN Sài Gòn') < svg.indexOf('Trần Thị B · 0901234567'))
+  assert.doesNotMatch(svg, PAGE_ONLY, tpl + ': thẻ không được chứa banner/bản quyền')
+  if (tpl !== 'minimal') {
+    assert.ok(near(png, '#0065A4') > (tpl === 'standard' ? 0.001 : 0.03), tpl + ': thiếu màu xanh Sacombank #0065A4')
+    assert.ok(near(png, '#F3B643') > 0.0005, tpl + ': thiếu màu vàng Sacombank #F3B643')
+    assert.match(svg, /<image [^>]*href="data:image\/png;base64,/)
+  } else {
+    assert.equal(PNG.sync.read(readFileSync(png)).data[3], 0, 'mẫu Tối giản phải không có nền')
+    assert.ok(svg.includes('>Sacombank</text>'))
+  }
+  // chỉ có số điện thoại: không dòng trống, không "null"
+  await fillStaff({ phone: '0901234567' })
+  const partial = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
+  assert.ok(partial.includes('>Sacombank</text>') && partial.includes('>0901234567</text>'))
+  assert.doesNotMatch(partial, /null|undefined|CN Sài Gòn|Trần Thị B| · <|> – |– </)
+  // bỏ trống hết: không còn phần cán bộ
+  await fillStaff({})
+  const emptyPng = await download('#dl-png', 'png')
+  copyFileSync(emptyPng, `${OUT}/card-${tpl}-empty.png`)
+  const empty = decodePng(emptyPng)
+  assert.equal(empty.text, stb)
+  const emptySvg = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
+  assert.doesNotMatch(emptySvg, /CÁN BỘ|CN Sài Gòn|Trần Thị B|0901234567|null|undefined/)
+  assert.ok(full.height > empty.height + 40, tpl + ': thẻ có thông tin cán bộ phải cao hơn thẻ không có')
+  assert.equal((svg.match(/<text /g) ?? []).length - (emptySvg.match(/<text /g) ?? []).length, tpl === 'business' ? 3 : 2)
+  heights[tpl] = [full.height, empty.height]
+  log(`mẫu ${tpl}: PNG + SVG quét đúng payload, màu Sacombank, 2 dòng cán bộ; bỏ trống thì không có phần cán bộ (cao ${full.height} → ${empty.height}px)`)
+}
+await fillStaff(staffFull)
+await page.click('[data-template-btn="bank"]')
+await page.locator('#qr-preview').scrollIntoViewIfNeeded()
+await page.screenshot({ path: `${OUT}/sacombank-390.png` })
+await page.reload()
+assert.deepEqual(await page.evaluate(() => ['branch', 'name', 'phone'].map((k) => document.querySelector('#staff-' + k).value)), Object.values(staffFull))
+assert.equal(await page.inputValue('#style-bank'), '970403')
+assert.match(await page.getAttribute('[data-template-btn="bank"]', 'class'), /chip-on/)
+await page.click('#clear-staff')
+assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('tmqr.staff.v1'))), { branch: '', name: '', phone: '' })
+assert.equal(await page.locator('#clear-staff').count(), 0)
+log('thông tin cán bộ: còn sau khi tải lại trang, nút Xóa xóa sạch')
+
+const footer = (await page.textContent('footer')).replace(/\s+/g, ' ')
+assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.1.0'))
+assert.ok(footer.includes('Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.'))
+assert.equal((await page.textContent('#promo')).replace(/\s+/g, ' ').trim(), 'Mở TK LPBank miễn phí: liên hệ ngay VH Phước Zalo 0988474228')
+assert.equal(await page.getAttribute('#promo', 'href'), 'https://zalo.me/0988474228')
+const promo = await page.evaluate(() => {
+  const el = document.querySelector('#promo')
+  const b = el.getBoundingClientRect()
+  const cs = getComputedStyle(el)
+  const main = document.querySelector('main').getBoundingClientRect()
+  const foot = document.querySelector('footer').getBoundingClientRect()
+  return { h: b.height, position: cs.position, bg: cs.backgroundColor, afterMain: b.top >= main.bottom, beforeFooter: b.bottom <= foot.top }
+})
+assert.deepEqual({ ...promo, h: promo.h <= 64 }, { h: true, position: 'static', bg: 'rgb(109, 55, 26)', afterMain: true, beforeFooter: true })
+await context.route('https://zalo.me/**', (r) => r.fulfill({ body: 'zalo' }))
+const [popup] = await Promise.all([context.waitForEvent('page'), page.click('#promo')])
+assert.equal(popup.url(), 'https://zalo.me/0988474228')
+await popup.close()
+log(`footer + banner: đúng nội dung, banner cao ${promo.h}px nằm giữa nội dung và footer, bấm mở https://zalo.me/0988474228`)
+await page.selectOption('#bank', '970449')
+await page.click('[data-template-btn="standard"]')
+
 // 2. Các loại khác
 const others = {
   url: [{ 'f-url': 'lpbank.com.vn' }, 'https://lpbank.com.vn'],
@@ -159,9 +276,9 @@ assert.ok(overflow <= 0, 'tràn ngang ' + overflow)
 log('không tràn ngang ở 390px')
 
 // 4. Lịch sử
-assert.equal(await page.locator('#history li').count(), 9)
+assert.equal(await page.locator('#history li').count(), 10)
 await page.reload()
-assert.equal(await page.locator('#history li').count(), 9)
+assert.equal(await page.locator('#history li').count(), 10)
 await page.click('#history li:last-child button:first-child')
 assert.equal(await payload(), vietqr)
 assert.equal(decodePng(await download('#history li:last-child button:last-child', 'png')).text, vietqr)
@@ -169,9 +286,10 @@ page.once('dialog', (d) => d.accept())
 await page.click('#clear-history')
 assert.equal(await page.locator('#history li').count(), 0)
 assert.equal(await page.evaluate(() => localStorage.getItem('tmqr.history.v1')), null)
-log('lịch sử: lưu 9 mục, còn sau khi tải lại trang, tạo lại + tải lại được, xóa sạch')
+log('lịch sử: lưu 10 mục, còn sau khi tải lại trang, tạo lại + tải lại được, xóa sạch')
 
 // 5. PWA + riêng tư
+assert.equal(await page.textContent('#app-version'), 'Tạo Mã QR Miễn Phí v' + JSON.parse(readFileSync('package.json', 'utf8')).version)
 const manifest = await (await fetch(base + '/manifest.webmanifest')).json()
 assert.equal(manifest.name, 'Tạo Mã QR Miễn Phí')
 assert.equal(manifest.display, 'standalone')

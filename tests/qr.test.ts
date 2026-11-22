@@ -140,3 +140,48 @@ describe('Cảnh báo khó quét', () => {
     expect(jsQR(new Uint8ClampedArray(img.pixels), img.width, img.height)?.data).toBe(payload)
   })
 })
+
+describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
+  const { BANK_STYLES, styleOf, NEUTRAL } = await import('../src/lib/styles')
+  const { cardSVG, layoutCard, staffLines, TEMPLATES } = await import('../src/lib/card')
+  const { APP_VERSION } = await import('../src/version')
+  const { readFileSync } = await import('node:fs')
+
+  it('mọi ngân hàng trong danh sách đều có phong cách; 18 ngân hàng chính có màu + logo đã xác minh', () => {
+    expect(BANK_STYLES).toHaveLength(BANKS.length)
+    expect(styleOf('970449')).toMatchObject({ primary: '#6D371A', accent: '#F99D1C', verified: true })
+    expect(styleOf('970403')).toMatchObject({ primary: '#0065A4', accent: '#F3B643', source: 'www.sacombank.com.vn' })
+    for (const code of ['VCB', 'ICB', 'BIDV', 'VBA', 'TCB', 'MB', 'ACB', 'VPB', 'TPB', 'STB', 'HDB', 'VIB', 'SHB', 'EIB', 'MSB', 'OCB', 'SEAB', 'LPB']) {
+      const s = BANK_STYLES.find((b) => b.code === code)!
+      expect(s.verified, code).toBe(true)
+      expect(s.logo?.src, code).toBeTruthy()
+    }
+    for (const s of BANK_STYLES.filter((b) => !b.verified)) expect({ primary: s.primary, accent: s.accent, logo: s.logo }).toEqual({ ...NEUTRAL, logo: undefined })
+  })
+
+  it('dòng cán bộ: bỏ trường trống, không có trường nào thì không có dòng nào', () => {
+    expect(staffLines('Sacombank', { branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' })).toEqual(['Sacombank – CN Sài Gòn', 'Trần Thị B · 0901234567'])
+    expect(staffLines('Sacombank', { branch: '', name: 'Trần Thị B', phone: '' })).toEqual(['Sacombank', 'Trần Thị B'])
+    expect(staffLines('Sacombank', { branch: 'CN Sài Gòn', name: '', phone: ' ' })).toEqual(['Sacombank – CN Sài Gòn'])
+    expect(staffLines('Sacombank', { branch: ' ', name: '', phone: '' })).toEqual([])
+  })
+
+  it('cả 4 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
+    const payload = buildVietQR({ bin: '970403', account: '0123456789', amount: '100000', content: 'Tien an trua' })
+    const model = buildModel(payload, DEFAULT_STYLE)
+    const brand = { name: 'Sacombank', primary: '#0065A4', accent: '#F3B643' }
+    for (const { id } of TEMPLATES.filter((t) => t.id !== 'plain')) {
+      for (const staff of [{ branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' }, { branch: '', name: '', phone: '' }]) {
+        const svg = cardSVG(layoutCard({ template: id, brand, subtitle: 'Sacombank · 0123456789', staffBank: 'Sacombank', staff }), model, DEFAULT_STYLE, undefined, 800)
+        const img = new Resvg(svg).render()
+        expect(jsQR(new Uint8ClampedArray(img.pixels), img.width, img.height)?.data, id).toBe(payload)
+        expect(svg.includes('Trần Thị B · 0901234567'), id).toBe(!!staff.name)
+        expect(svg).not.toMatch(/null|undefined|NaN/)
+      }
+    }
+  })
+
+  it('số phiên bản: package.json khớp src/version.ts', () => {
+    expect(JSON.parse(readFileSync('package.json', 'utf8')).version).toBe(APP_VERSION)
+  })
+})

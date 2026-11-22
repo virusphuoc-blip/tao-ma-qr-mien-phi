@@ -5,6 +5,17 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.1.0
+
+- **Phong cách theo ngân hàng**: chọn ngân hàng nhận thì giao diện và thẻ QR tự đổi sang màu + logo ngân hàng đó (đổi tay được ở mục "Phong cách"). 52 tổ chức có màu/logo lấy từ website chính thức (xem `src/lib/styles.ts`, trường `source`); 24 tổ chức chưa xác minh được dùng kiểu xanh đậm trung tính, không logo.
+- **4 mẫu thẻ QR** (PNG/SVG tải về là cả thẻ): Chuẩn, Thẻ ngân hàng, Tối giản, Doanh nghiệp — cùng mẫu "Chỉ mã QR" như bản 1.0.
+- **Thông tin cán bộ phụ trách** (chi nhánh, tên, số điện thoại): in thành chữ dưới mã, không nằm trong dữ liệu mã QR; ô trống không hiện; lưu trên máy.
+- Số phiên bản chỉ sửa ở `src/version.ts`, rồi chạy `npm run version:sync`.
+
+## What's new in v1.1.0
+
+Bank styles (official colors + logo per bank, auto-switching with the selected bank), four downloadable card templates, optional staff info printed below the QR (never encoded in the payload), version shown in the footer from `src/version.ts`.
+
 ## Tiếng Việt
 
 ### Tính năng

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import lpbankLogo from './assets/lpbank-logo.png?inline'
-import { BANKS } from './lib/banks'
+import { BANKS, DEFAULT_BIN } from './lib/banks'
+import { cardPNG, cardSVG, EMPTY_STAFF, layoutCard, TEMPLATES, type CardInput, type Staff, type Template } from './lib/card'
 import { addHistory, clearHistory, loadHistory, type HistoryItem } from './lib/history'
 import { buildPayload, typeDef, TYPES, type FormData, type QRType } from './lib/payloads'
 import {
@@ -15,7 +16,9 @@ import {
   type QRModel,
   type QRStyle,
 } from './lib/render'
+import { BANK_STYLES, styleOf, themeVars } from './lib/styles'
 import { toTransferContent } from './lib/vietqr'
+import { APP_NAME, APP_VERSION } from './version'
 
 const BRAND_BROWN = '#6D371A'
 const LPBANK_LOGO: Logo = { src: lpbankLogo, width: 216, height: 55 }
@@ -58,8 +61,80 @@ function saveBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
-async function resolveLogo(style: QRStyle): Promise<Logo | undefined> {
+const ZALO_URL = 'https://zalo.me/0988474228'
+const STAFF_KEY = 'tmqr.staff.v1'
+const CARD_KEY = 'tmqr.card.v1'
+
+function loadJSON<T extends object>(key: string, fallback: T): T {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? 'null')
+    return v && typeof v === 'object' ? { ...fallback, ...v } : fallback
+  } catch {
+    return fallback
+  }
+}
+function saveJSON(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    /* hết dung lượng lưu trữ: bỏ qua */
+  }
+}
+
+const brandLogoCache = new Map<string, Promise<Logo | undefined>>()
+/** logo ngân hàng dạng data URL để nhúng được vào SVG/PNG xuất ra */
+function loadBrandLogo(bin: string): Promise<Logo | undefined> {
+  let p = brandLogoCache.get(bin)
+  if (!p) {
+    const logo = styleOf(bin).logo
+    p = !logo
+      ? Promise.resolve(undefined)
+      : fetch(logo.src)
+          .then((r) => r.blob())
+          .then(
+            (blob) =>
+              new Promise<Logo | undefined>((resolve) => {
+                const reader = new FileReader()
+                reader.onload = () => resolve({ ...logo, src: String(reader.result) })
+                reader.onerror = () => resolve(undefined)
+                reader.readAsDataURL(blob)
+              }),
+          )
+          .catch(() => undefined)
+    brandLogoCache.set(bin, p)
+  }
+  return p
+}
+
+interface CardChoice {
+  template: Template
+  styleBin: string
+}
+
+function cardInput(choice: CardChoice, brandLogo: Logo | undefined, type: QRType, form: FormData, staff: Staff): CardInput {
+  const brand = styleOf(choice.styleBin)
+  const bank = type === 'vietqr' ? BANKS.find((b) => b.bin === form.bin) : undefined
+  return {
+    template: choice.template,
+    brand: { name: brand.name, primary: brand.primary, accent: brand.accent, logo: brandLogo },
+    title: bank && form.name.trim() ? form.name.trim().toUpperCase() : undefined,
+    subtitle: bank ? `${bank.shortName} · ${form.account}` : undefined,
+    amount: bank && form.amount ? formatVnd(form.amount) + ' đ' : undefined,
+    staffBank: bank?.shortName ?? brand.name,
+    staff,
+  }
+}
+
+function renderSVG(model: QRModel, style: QRStyle, logo: Logo | undefined, size: number, input: CardInput): string {
+  return input.template === 'plain' ? toSVG(model, style, logo, size) : cardSVG(layoutCard(input), model, style, logo, size)
+}
+function renderPNG(model: QRModel, style: QRStyle, logo: Logo | undefined, size: number, input: CardInput): Promise<Blob> {
+  return input.template === 'plain' ? toPNG(model, style, logo, size) : cardPNG(layoutCard(input), model, style, logo, size)
+}
+
+async function resolveLogo(style: QRStyle, styleBin: string): Promise<Logo | undefined> {
   if (style.logo === 'lpbank') return LPBANK_LOGO
+  if (style.logo === 'bank') return loadBrandLogo(styleBin)
   if (style.logo === 'custom' && style.customLogo) {
     const img = await loadImage(style.customLogo)
     return { src: style.customLogo, width: img.naturalWidth || 1, height: img.naturalHeight || 1 }
@@ -86,6 +161,29 @@ export default function App() {
   const [bankQuery, setBankQuery] = useState('')
   const [toast, setToast] = useState('')
   const toastTimer = useRef<number>(undefined)
+  const [choice, setChoice] = useState<CardChoice>(() => {
+    const c = loadJSON<CardChoice>(CARD_KEY, { template: 'standard', styleBin: DEFAULT_BIN })
+    return { template: TEMPLATES.some((t) => t.id === c.template) ? c.template : 'standard', styleBin: styleOf(c.styleBin).bin }
+  })
+  const [staff, setStaff] = useState<Staff>(() => loadJSON(STAFF_KEY, EMPTY_STAFF))
+  const [brandLogo, setBrandLogo] = useState<{ bin: string; logo?: Logo }>()
+  const bankStyle = styleOf(choice.styleBin)
+
+  useEffect(() => saveJSON(CARD_KEY, choice), [choice])
+  useEffect(() => saveJSON(STAFF_KEY, staff), [staff])
+  useEffect(() => {
+    const root = document.documentElement
+    for (const [k, v] of Object.entries(themeVars(bankStyle))) root.style.setProperty(k, v)
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bankStyle.primary)
+    let live = true
+    loadBrandLogo(bankStyle.bin).then((l) => live && setBrandLogo({ bin: bankStyle.bin, logo: l }))
+    return () => {
+      live = false
+    }
+  }, [bankStyle])
+  const currentBrandLogo = brandLogo?.bin === bankStyle.bin ? brandLogo.logo : undefined
+  const setStaffField = (key: keyof Staff, value: string) => setStaff((v) => ({ ...v, [key]: value }))
+  const hasStaff = !!(staff.branch || staff.name || staff.phone)
 
   const form = forms[type]
   const setField = (key: string, value: string) =>
@@ -101,7 +199,7 @@ export default function App() {
   useEffect(() => {
     let live = true
     if (style.logo === 'custom' && style.customLogo) {
-      resolveLogo(style).then(
+      resolveLogo(style, '').then(
         (l) => live && setCustomLogo(l),
         () => live && setCustomLogo(undefined),
       )
@@ -114,14 +212,17 @@ export default function App() {
   const logo =
     style.logo === 'lpbank'
       ? LPBANK_LOGO
-      : style.logo === 'custom' && customLogo?.src === style.customLogo
+      : style.logo === 'bank'
+        ? currentBrandLogo
+        : style.logo === 'custom' && customLogo?.src === style.customLogo
         ? customLogo
         : undefined
 
   const built = useMemo(() => buildPayload(type, form), [type, form])
   const model = useMemo(() => safeModel(built.payload, style, logo), [built.payload, style, logo])
   const tooLong = !!built.payload && !model
-  const svg = useMemo(() => (model ? toSVG(model, style, logo) : ''), [model, style, logo])
+  const card = useMemo(() => cardInput(choice, currentBrandLogo, type, form, staff), [choice, currentBrandLogo, type, form, staff])
+  const svg = useMemo(() => (model ? renderSVG(model, style, logo, 1024, card) : ''), [model, style, logo, card])
   const warnings = useMemo(() => scanWarnings(model, style), [model, style])
 
   const banks = useMemo(() => {
@@ -137,14 +238,14 @@ export default function App() {
 
   const remember = () => {
     if (!built.payload) return
-    setHistory((h) => addHistory(h, { type, form, style, label: describe(type, form, built.payload) }))
+    setHistory((h) => addHistory(h, { type, form, style, card: choice, label: describe(type, form, built.payload) }))
   }
   const fileName = (ext: string) => `qr-${type}-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}.${ext}`
 
   const downloadPNG = async () => {
     if (!model) return
     try {
-      saveBlob(await toPNG(model, style, logo, pngSize), fileName('png'))
+      saveBlob(await renderPNG(model, style, logo, pngSize, card), fileName('png'))
       remember()
       notify(`Đã tải PNG ${pngSize}px`)
     } catch (e) {
@@ -153,14 +254,14 @@ export default function App() {
   }
   const downloadSVG = () => {
     if (!model) return
-    saveBlob(new Blob([toSVG(model, style, logo, pngSize)], { type: 'image/svg+xml' }), fileName('svg'))
+    saveBlob(new Blob([renderSVG(model, style, logo, pngSize, card)], { type: 'image/svg+xml' }), fileName('svg'))
     remember()
     notify('Đã tải SVG')
   }
   const copyImage = async () => {
     if (!model) return
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': toPNG(model, style, logo, pngSize) })])
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': renderPNG(model, style, logo, pngSize, card) })])
       remember()
       notify('Đã sao chép ảnh')
     } catch {
@@ -170,7 +271,7 @@ export default function App() {
   const share = async () => {
     if (!model) return
     try {
-      const file = new File([await toPNG(model, style, logo, pngSize)], fileName('png'), { type: 'image/png' })
+      const file = new File([await renderPNG(model, style, logo, pngSize, card)], fileName('png'), { type: 'image/png' })
       if (!navigator.canShare?.({ files: [file] })) {
         notify('Trình duyệt không hỗ trợ chia sẻ ảnh. Hãy dùng Tải PNG.')
         return
@@ -195,6 +296,7 @@ export default function App() {
     setType(item.type)
     setForms((f) => ({ ...f, [item.type]: { ...typeDef(item.type).defaults, ...item.form } }))
     setStyle({ ...DEFAULT_STYLE, ...item.style })
+    if (item.card) setChoice(item.card)
     window.scrollTo({ top: 0, behavior: 'smooth' })
     notify('Đã tạo lại mã từ lịch sử')
   }
@@ -202,10 +304,12 @@ export default function App() {
     try {
       const built = buildPayload(item.type, item.form)
       const itemStyle = { ...DEFAULT_STYLE, ...item.style }
-      const itemLogo = await resolveLogo(itemStyle)
+      const itemChoice = item.card ?? choice
+      const itemLogo = await resolveLogo(itemStyle, itemChoice.styleBin)
       const m = safeModel(built.payload, itemStyle, itemLogo)
       if (!m) return notify('Không tạo lại được mã này.')
-      saveBlob(await toPNG(m, itemStyle, itemLogo, pngSize), `qr-${item.type}-${item.id}.png`)
+      const input = cardInput(itemChoice, await loadBrandLogo(itemChoice.styleBin), item.type, { ...typeDef(item.type).defaults, ...item.form }, staff)
+      saveBlob(await renderPNG(m, itemStyle, itemLogo, pngSize, input), `qr-${item.type}-${item.id}.png`)
       notify(`Đã tải PNG ${pngSize}px`)
     } catch (e) {
       notify((e as Error).message)
@@ -216,9 +320,9 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col">
-      <header className="border-b-4 border-accent bg-brand px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 text-white">
+      <header className="border-b-4 border-accent bg-brand px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 text-on-brand">
         <h1 className="text-xl font-bold">Tạo Mã QR Miễn Phí</h1>
-        <p className="text-sm text-white/90">VietQR chuyển khoản, WiFi, danh thiếp… Không cần đăng nhập.</p>
+        <p className="text-sm opacity-90">VietQR chuyển khoản, WiFi, danh thiếp… Không cần đăng nhập.</p>
       </header>
 
       <main className="flex-1 space-y-3 p-3">
@@ -251,7 +355,11 @@ export default function App() {
                   onChange={(e) => setBankQuery(e.target.value)}
                   aria-label="Tìm ngân hàng"
                 />
-                <select id="bank" className="field" value={form.bin} onChange={(e) => setField('bin', e.target.value)}>
+                <select id="bank" className="field" value={form.bin} onChange={(e) => {
+                    setField('bin', e.target.value)
+                    setChoice((c) => ({ ...c, styleBin: e.target.value }))
+                  }}
+                >
                   {banks.map((b) => (
                     <option key={b.bin} value={b.bin}>
                       {b.shortName} – {b.name} ({b.bin})
@@ -383,10 +491,11 @@ export default function App() {
             <>
               <div
                 id="qr-preview"
-                className="mx-auto aspect-square w-full max-w-72 overflow-hidden rounded-xl border border-neutral-200 [&>svg]:h-full [&>svg]:w-full"
+                data-template={choice.template}
+                className="mx-auto w-full max-w-80 overflow-hidden rounded-xl border border-neutral-200 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
-              {type === 'vietqr' && (
+              {type === 'vietqr' && choice.template === 'plain' && (
                 <div className="mt-2 text-center text-sm">
                   {form.name.trim() && <div className="font-semibold uppercase">{form.name.trim()}</div>}
                   <div className="text-neutral-600">
@@ -446,6 +555,67 @@ export default function App() {
           )}
         </section>
 
+        <section className="card space-y-4">
+          <div>
+            <label className="label" htmlFor="style-bank">
+              Phong cách (màu + logo ngân hàng)
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="size-6 shrink-0 rounded-full border border-neutral-200" style={{ background: bankStyle.primary }} />
+              <span className="size-6 shrink-0 rounded-full border border-neutral-200" style={{ background: bankStyle.accent }} />
+              <select id="style-bank" className="field" value={choice.styleBin} onChange={(e) => setChoice((c) => ({ ...c, styleBin: e.target.value }))}>
+                {BANK_STYLES.map((b) => (
+                  <option key={b.bin} value={b.bin}>
+                    {b.name}
+                    {b.verified ? '' : ' (kiểu trung tính)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p id="style-note" className="mt-1 text-xs text-neutral-500">
+              {bankStyle.verified
+                ? `Màu và logo lấy từ ${bankStyle.source}. Chọn ngân hàng nhận ở trên sẽ tự đổi phong cách; bạn có thể đổi lại tại đây.`
+                : 'Chưa xác minh được màu chính thức của tổ chức này nên dùng kiểu xanh đậm trung tính, không có logo.'}
+            </p>
+          </div>
+          <div>
+            <span className="label">Mẫu thẻ QR</span>
+            <div className="flex flex-wrap gap-2">
+              {TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  data-template-btn={t.id}
+                  title={t.hint}
+                  className={`chip ${choice.template === t.id ? 'chip-on' : ''}`}
+                  onClick={() => setChoice((c) => ({ ...c, template: t.id }))}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-neutral-500">{TEMPLATES.find((t) => t.id === choice.template)?.hint}. Ảnh PNG/SVG tải về đúng như bản xem trước.</p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="label">Thông tin cán bộ phụ trách</span>
+              {hasStaff && (
+                <button type="button" id="clear-staff" className="text-sm font-medium text-brand" onClick={() => setStaff(EMPTY_STAFF)}>
+                  Xóa
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              <input id="staff-branch" className="field" placeholder="Chi nhánh (ví dụ: CN Sài Gòn)" maxLength={60} value={staff.branch} onChange={(e) => setStaffField('branch', e.target.value)} />
+              <input id="staff-name" className="field" placeholder="Tên nhân viên" maxLength={60} value={staff.name} onChange={(e) => setStaffField('name', e.target.value)} />
+              <input id="staff-phone" className="field" inputMode="tel" placeholder="Số điện thoại" maxLength={20} value={staff.phone} onChange={(e) => setStaffField('phone', e.target.value)} />
+            </div>
+            <p className="mt-1 text-xs text-neutral-500">
+              Không bắt buộc. Chỉ in thành chữ dưới mã trên thẻ, không nằm trong dữ liệu mã QR. Ô bỏ trống sẽ không hiện; được lưu trên máy này.
+            </p>
+          </div>
+        </section>
+
         <details className="card group" open>
           <summary className="cursor-pointer font-semibold">Tùy chỉnh mã QR</summary>
           <div className="mt-3 space-y-4">
@@ -487,7 +657,7 @@ export default function App() {
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm font-medium">
-              <input id="rounded" type="checkbox" className="size-5 accent-[#6d371a]" checked={style.rounded} onChange={(e) => patchStyle({ rounded: e.target.checked })} />
+              <input id="rounded" type="checkbox" className="size-5 accent-brand" checked={style.rounded} onChange={(e) => patchStyle({ rounded: e.target.checked })} />
               Bo tròn các ô
             </label>
             <div>
@@ -496,6 +666,11 @@ export default function App() {
                 <button type="button" data-logo="none" className={`chip ${style.logo === 'none' ? 'chip-on' : ''}`} onClick={() => patchStyle({ logo: 'none' })}>
                   Không
                 </button>
+                {bankStyle.logo && bankStyle.code !== 'LPB' && (
+                  <button type="button" data-logo="bank" className={`chip ${style.logo === 'bank' ? 'chip-on' : ''}`} onClick={() => patchStyle({ logo: 'bank', ec: 'H' })}>
+                    Logo {bankStyle.name}
+                  </button>
+                )}
                 <button type="button" data-logo="lpbank" className={`chip ${style.logo === 'lpbank' ? 'chip-on' : ''}`} onClick={() => patchStyle({ logo: 'lpbank', ec: 'H' })}>
                   Logo LPBank
                 </button>
@@ -560,9 +735,25 @@ export default function App() {
         </section>
       </main>
 
+      <a
+        id="promo"
+        href={ZALO_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mx-3 mb-2 block rounded-xl border-l-4 border-[#F99D1C] bg-[#6D371A] px-3 py-2 text-center text-sm font-medium text-white"
+      >
+        Mở TK LPBank miễn phí: liên hệ ngay VH Phước <span className="font-bold whitespace-nowrap text-[#F99D1C]">Zalo 0988474228</span>
+      </a>
+
       <footer className="px-4 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-neutral-600">
         <p className="font-medium">Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.</p>
         <p className="mt-1">Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.</p>
+        <p id="copyright" className="mt-2">
+          © 2026 VH Phước. Mọi nội dung thuộc về VH Phước.{' '}
+          <span id="app-version" className="whitespace-nowrap">
+            {APP_NAME} v{APP_VERSION}
+          </span>
+        </p>
       </footer>
 
       {toast && (

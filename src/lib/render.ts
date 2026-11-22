@@ -7,7 +7,7 @@ export interface QRStyle {
   bg: string
   ec: ECLevel
   rounded: boolean
-  logo: 'none' | 'lpbank' | 'custom'
+  logo: 'none' | 'lpbank' | 'bank' | 'custom'
   customLogo?: string
 }
 
@@ -100,9 +100,10 @@ export function buildModel(text: string, style: QRStyle, logo?: Logo): QRModel {
   return { count, version: qr.version, total, path: parts.join(''), logoBox }
 }
 
-const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+export const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
-export function toSVG(model: QRModel, style: QRStyle, logo?: Logo, size = 1024): string {
+/** nội dung SVG của riêng mã QR, trong hệ tọa độ 0..model.total */
+export function qrInner(model: QRModel, style: QRStyle, logo?: Logo): string {
   const b = model.logoBox
   const logoSvg =
     b && logo
@@ -110,10 +111,16 @@ export function toSVG(model: QRModel, style: QRStyle, logo?: Logo, size = 1024):
         `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" preserveAspectRatio="xMidYMid meet" href="${attr(logo.src)}"/>`
       : ''
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${model.total} ${model.total}"${style.rounded ? '' : ' shape-rendering="crispEdges"'}>` +
     `<rect width="${model.total}" height="${model.total}" fill="${attr(style.bg)}"/>` +
     `<path fill="${attr(style.fg)}" d="${model.path}"/>` +
-    logoSvg +
+    logoSvg
+  )
+}
+
+export function toSVG(model: QRModel, style: QRStyle, logo?: Logo, size = 1024): string {
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${model.total} ${model.total}"${style.rounded ? '' : ' shape-rendering="crispEdges"'}>` +
+    qrInner(model, style, logo) +
     `</svg>`
   )
 }
@@ -127,29 +134,46 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
+export async function drawQR(
+  ctx: CanvasRenderingContext2D,
+  model: QRModel,
+  style: QRStyle,
+  logo: Logo | undefined,
+  x: number,
+  y: number,
+  size: number,
+) {
+  const img = model.logoBox && logo ? await loadImage(logo.src) : undefined
+  const scale = size / model.total
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(scale, scale)
+  ctx.fillStyle = style.bg
+  ctx.fillRect(0, 0, model.total, model.total)
+  ctx.fillStyle = style.fg
+  ctx.fill(new Path2D(model.path))
+  const b = model.logoBox
+  if (b && img) {
+    ctx.fillStyle = style.bg
+    ctx.fillRect(b.plate.x, b.plate.y, b.plate.w, b.plate.h)
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(img, b.x, b.y, b.w, b.h)
+  }
+  ctx.restore()
+}
+
+export function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Không tạo được ảnh PNG.'))), 'image/png'),
+  )
+}
+
 export async function toPNG(model: QRModel, style: QRStyle, logo: Logo | undefined, size: number): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
-  const ctx = canvas.getContext('2d')!
-  const scale = size / model.total
-  ctx.fillStyle = style.bg
-  ctx.fillRect(0, 0, size, size)
-  ctx.save()
-  ctx.scale(scale, scale)
-  ctx.fillStyle = style.fg
-  ctx.fill(new Path2D(model.path))
-  const b = model.logoBox
-  if (b && logo) {
-    ctx.fillStyle = style.bg
-    ctx.fillRect(b.plate.x, b.plate.y, b.plate.w, b.plate.h)
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(await loadImage(logo.src), b.x, b.y, b.w, b.h)
-  }
-  ctx.restore()
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Không tạo được ảnh PNG.'))), 'image/png'),
-  )
+  await drawQR(canvas.getContext('2d')!, model, style, logo, 0, 0, size)
+  return canvasBlob(canvas)
 }
 
 function luminance(hex: string): number {

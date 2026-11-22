@@ -7,6 +7,8 @@
   --color-brand-soft: #fef3e0;
   --color-accent: #f99d1c;
   --color-accent-dark: #e08a0c;
+  --color-on-brand: #ffffff;
+  --color-on-accent: #1f1f1f;
   --color-ink: #1f1f1f;
 }
 
@@ -33,12 +35,12 @@ body {
     @apply rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium active:bg-neutral-100;
   }
   .chip-on {
-    @apply border-brand bg-brand text-white active:bg-brand-dark;
+    @apply border-brand bg-brand text-on-brand active:bg-brand-dark;
   }
   .btn {
     @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold active:bg-neutral-100 disabled:opacity-40;
   }
   .btn-primary {
-    @apply border-accent bg-accent text-brand-dark active:bg-accent-dark;
+    @apply border-accent bg-accent text-on-accent active:bg-accent-dark;
   }
 }

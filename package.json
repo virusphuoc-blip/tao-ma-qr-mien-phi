@@ -1,7 +1,7 @@
 {
   "name": "tao-ma-qr-mien-phi",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "node tests/e2e.mjs",
+    "version:sync": "node scripts/sync-version.mjs",
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
