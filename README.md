@@ -5,6 +5,11 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.3.0
+
+- **4 mẫu thẻ QR mới** (tổng 12, cùng mẫu "Chỉ mã QR"): Xanh Lá Thiên Nhiên, Biển Xanh, Tím Hoàng Gia, Trung Thu. Họa tiết vẽ bằng SVG; màu là màu trang trí, không phải màu thương hiệu.
+- Trên iPhone/iPad có dòng gợi ý dưới các nút tải: "iPhone: bấm Chia sẻ → Lưu hình ảnh" (Safari tải ảnh vào Tệp chứ không vào Album ảnh).
+
 ## Mới ở v1.2.1
 
 - Dòng dưới logo trên các mẫu thẻ nền màu ghi tên tiếng Việt đầy đủ của ngân hàng (LPBank: "Ngân hàng TMCP Lộc Phát Việt Nam") thay cho tên ngắn. Chỉ áp dụng cho tên đã đối chiếu trên website chính thức (`src/lib/fullnames.ts`); còn lại giữ tên ngắn.

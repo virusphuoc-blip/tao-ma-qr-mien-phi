@@ -57,6 +57,8 @@ function describe(type: QRType, form: FormData, payload: string): string {
   return text.length > 40 ? text.slice(0, 40) + '…' : text
 }
 
+/** iPhone/iPad (iPadOS tự nhận là Mac nhưng có màn hình cảm ứng): Safari tải ảnh vào Tệp chứ không vào Album ảnh */
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const ZALO_URL = 'https://zalo.me/0988474228'
 const STAFF_KEY = 'tmqr.staff.v1'
 const CARD_KEY = 'tmqr.card.v1'
@@ -539,6 +541,11 @@ export default function App() {
                   📤 Chia sẻ
                 </button>
               </div>
+              {IS_IOS && (
+                <p id="ios-hint" className="mt-2 rounded-lg bg-brand-soft px-3 py-2 text-center text-sm font-medium text-brand">
+                  iPhone: bấm Chia sẻ → Lưu hình ảnh
+                </p>
+              )}
               <details className="mt-3 text-sm">
                 <summary className="cursor-pointer font-medium text-neutral-700">Xem chuỗi dữ liệu trong mã</summary>
                 <pre id="payload" className="mt-2 rounded-xl bg-neutral-100 p-3 text-xs break-all whitespace-pre-wrap">

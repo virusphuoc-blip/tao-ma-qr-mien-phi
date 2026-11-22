@@ -1,7 +1,7 @@
 import { attr, canvasBlob, drawQR, loadImage, qrInner, type Logo, type QRModel, type QRStyle } from './render'
 import { onColor, shade } from './styles'
 
-export type Template = 'standard' | 'bank' | 'minimal' | 'business' | 'tree' | 'luxury' | 'gradient' | 'tet' | 'plain'
+export type Template = 'standard' | 'bank' | 'minimal' | 'business' | 'tree' | 'luxury' | 'gradient' | 'tet' | 'nature' | 'ocean' | 'royal' | 'midautumn' | 'plain'
 
 export const TEMPLATES: { id: Template; label: string; hint: string }[] = [
   { id: 'standard', label: 'Chuẩn', hint: 'Thẻ trắng, logo ngân hàng phía trên' },
@@ -12,6 +12,10 @@ export const TEMPLATES: { id: Template; label: string; hint: string }[] = [
   { id: 'luxury', label: 'Vàng Sang Trọng', hint: 'Nền nâu đen, chữ và viền vàng' },
   { id: 'gradient', label: 'Gradient Hiện Đại', hint: 'Nền chuyển màu xanh ngọc sang tím' },
   { id: 'tet', label: 'Tết Lộc Phát', hint: 'Đỏ và vàng ngày Tết, đèn lồng và đồng tiền vàng' },
+  { id: 'nature', label: 'Xanh Lá Thiên Nhiên', hint: 'Nền xanh lá, họa tiết tre và lá' },
+  { id: 'ocean', label: 'Biển Xanh', hint: 'Nền xanh biển, họa tiết sóng' },
+  { id: 'royal', label: 'Tím Hoàng Gia', hint: 'Nền tím đậm, chữ và viền vàng' },
+  { id: 'midautumn', label: 'Trung Thu', hint: 'Cam đỏ ấm, đèn lồng và trăng rằm' },
   { id: 'plain', label: 'Chỉ mã QR', hint: 'Ảnh vuông chỉ có mã, như bản 1.0' },
 ]
 
@@ -158,6 +162,34 @@ function lantern(cx: number, top: number, s: number): Node[] {
   ]
 }
 
+/** chiếc lá: gốc tại (x, y), dài len, nghiêng deg độ */
+function leaf(x: number, y: number, len: number, deg: number, fill: string): Node {
+  const a = (deg * Math.PI) / 180
+  const dx = Math.cos(a)
+  const dy = Math.sin(a)
+  const mx = x + (dx * len) / 2
+  const my = y + (dy * len) / 2
+  const k = len * 0.3
+  return { t: 'path', d: `M${n1(x)} ${n1(y)}Q${n1(mx - dy * k)} ${n1(my + dx * k)} ${n1(x + dx * len)} ${n1(y + dy * len)}Q${n1(mx + dy * k)} ${n1(my - dx * k)} ${n1(x)} ${n1(y)}Z`, fill }
+}
+
+/** thân tre dọc mép thẻ kèm vài chiếc lá */
+function bamboo(x: number, H: number, dir: 1 | -1): Node[] {
+  const out: Node[] = [{ t: 'rect', x: x - 11, y: 0, w: 22, h: H, fill: 'rgba(255,255,255,0.13)' }]
+  for (let y = 150, i = 0; y < H; y += 210, i++) {
+    out.push({ t: 'rect', x: x - 14, y: y - 4, w: 28, h: 8, r: 4, fill: 'rgba(255,255,255,0.22)' })
+    if (i % 2 === 0) out.push(leaf(x, y, 92, dir > 0 ? -28 : 208, 'rgba(255,255,255,0.16)'), leaf(x, y, 70, dir > 0 ? 24 : 156, 'rgba(255,255,255,0.12)'))
+  }
+  return out
+}
+
+/** dải sóng ngang thẻ, đỉnh sóng quanh y, tô xuống tới bottom */
+function wave(W: number, y: number, bottom: number, amp: number, shift: number, fill: string): Node {
+  let d = `M${n1(-shift)} ${n1(y)}q62.5 ${n1(-amp)} 125 0`
+  for (let x = 125 - shift; x < W; x += 125) d += 't125 0'
+  return { t: 'path', d: `${d}V${n1(bottom)}H${n1(-shift)}Z`, fill }
+}
+
 interface PanelTheme {
   from: string
   to: string
@@ -198,6 +230,80 @@ function panelTheme(template: Template, brand: CardInput['brand'], strong: strin
         ...coin(112, H - 40, 22),
         ...coin(W - 64, H - 62, 34),
         ...coin(W - 112, H - 40, 22),
+      ],
+    }
+  if (template === 'nature')
+    return {
+      from: '#43B36B',
+      to: '#0C5A38',
+      on: '#FFFFFF',
+      line: '#D9F99D',
+      strong: '#15803D',
+      staffW: 840,
+      deco: (W, H) => [
+        ...bamboo(34, H, 1),
+        ...bamboo(W - 34, H, -1),
+        leaf(150, 70, 120, 150, 'rgba(255,255,255,0.14)'),
+        leaf(150, 70, 96, 195, 'rgba(255,255,255,0.1)'),
+        leaf(W - 150, 70, 120, 30, 'rgba(255,255,255,0.14)'),
+        leaf(W - 150, 70, 96, -15, 'rgba(255,255,255,0.1)'),
+      ],
+    }
+  if (template === 'ocean')
+    return {
+      from: '#22A7E8',
+      to: '#0A3A8A',
+      on: '#FFFFFF',
+      line: '#A5F3FC',
+      strong: '#0B5CAD',
+      staffW: 880,
+      deco: (W, H) => [
+        wave(W, 110, 150, 34, 0, 'rgba(255,255,255,0.1)'),
+        wave(W, 70, 110, 26, 60, 'rgba(255,255,255,0.1)'),
+        wave(W, H - 150, H, 40, 30, 'rgba(255,255,255,0.1)'),
+        wave(W, H - 100, H, 34, 90, 'rgba(255,255,255,0.1)'),
+        wave(W, H - 52, H, 26, 0, 'rgba(255,255,255,0.12)'),
+      ],
+    }
+  if (template === 'royal')
+    return {
+      from: '#56208C',
+      to: '#1C0A3A',
+      on: '#EBCB73',
+      line: '#EBCB73',
+      strong: '#5B21A6',
+      staffW: 840,
+      deco: (W, H) => [
+        { t: 'rect', x: 16, y: 16, w: W - 32, h: H - 32, r: 36, fill: 'none', stroke: '#D4AF37', sw: 4 },
+        { t: 'rect', x: 28, y: 28, w: W - 56, h: H - 56, r: 28, fill: 'none', stroke: '#9C7BD6', sw: 1.5 },
+        ...[
+          [70, 70],
+          [W - 70, 70],
+          [70, H - 70],
+          [W - 70, H - 70],
+        ].map(([x, y]): Node => ({ t: 'path', d: `M${x} ${y - 20}L${x + 20} ${y}L${x} ${y + 20}L${x - 20} ${y}Z`, fill: '#D4AF37' })),
+      ],
+    }
+  if (template === 'midautumn')
+    return {
+      from: '#EE6A1F',
+      to: '#9A1A12',
+      on: '#FFE9A8',
+      line: GOLD,
+      strong: '#C2410C',
+      staffW: 880,
+      deco: (W) => [
+        { t: 'path', d: circle(W - 120, 130, 92), fill: 'rgba(255,236,170,0.22)' },
+        { t: 'path', d: circle(W - 120, 130, 70), fill: '#FFE9A8' },
+        { t: 'path', d: circle(W - 142, 112, 12) + circle(W - 100, 150, 9) + circle(W - 112, 104, 6), fill: 'rgba(214,158,46,0.45)' },
+        { t: 'path', d: `M${W - 250} 222q22 -30 52 -12q26 -26 58 -4q34 -8 40 16Z`, fill: 'rgba(255,255,255,0.2)' },
+        ...lantern(96, 0, 0.9),
+        ...lantern(182, 0, 0.5),
+        ...[
+          [250, 60],
+          [300, 130],
+          [W - 280, 56],
+        ].map(([x, y]): Node => ({ t: 'path', d: `M${x} ${y - 10}L${x + 3} ${y - 3}L${x + 10} ${y}L${x + 3} ${y + 3}L${x} ${y + 10}L${x - 3} ${y + 3}L${x - 10} ${y}L${x - 3} ${y - 3}Z`, fill: '#FFE9A8' })),
       ],
     }
 }

@@ -167,7 +167,7 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     expect(staffLines({ branch: 'Chi nhánh Thành phố Hồ Chí Minh – PGD Bến Thành', name: 'Nguyễn Hoàng Thị Phương Thảo', phone: '0901234567' }, 860, 26)).toHaveLength(2)
   })
 
-  it('cả 8 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
+  it('cả 12 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
     const payload = buildVietQR({ bin: '970403', account: '0123456789', amount: '100000', content: 'Tien an trua' })
     const model = buildModel(payload, DEFAULT_STYLE)
     const brand = { name: 'Sacombank', primary: '#0065A4', accent: '#F3B643' }
@@ -191,8 +191,8 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     }
   })
 
-  it('v1.2: có đủ 8 mẫu thẻ + "Chỉ mã QR"; Cây Vàng vẽ bằng path, khẩu hiệu chỉ khi được truyền vào', () => {
-    expect(TEMPLATES.map((t) => t.id)).toEqual(['standard', 'bank', 'minimal', 'business', 'tree', 'luxury', 'gradient', 'tet', 'plain'])
+  it('v1.2: có đủ 12 mẫu thẻ + "Chỉ mã QR"; Cây Vàng vẽ bằng path, khẩu hiệu chỉ khi được truyền vào', () => {
+    expect(TEMPLATES.map((t) => t.id)).toEqual(['standard', 'bank', 'minimal', 'business', 'tree', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'royal', 'midautumn', 'plain'])
     const model = buildModel('x', DEFAULT_STYLE)
     const staff = { branch: '', name: '', phone: '' }
     const tree = (tagline?: string) =>

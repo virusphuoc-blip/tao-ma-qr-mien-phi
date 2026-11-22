@@ -231,7 +231,7 @@ assert.equal(await page.locator('#clear-staff').count(), 0)
 log('thông tin cán bộ: còn sau khi tải lại trang, nút Xóa xóa sạch')
 
 const footer = (await page.textContent('footer')).replace(/\s+/g, ' ')
-assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.2.1'))
+assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.3.0'))
 assert.doesNotMatch(footer, /không phải sản phẩm|Công cụ miễn phí/)
 assert.equal((await page.textContent('#promo')).replace(/\s+/g, ' ').trim(), 'Mở TK LPBank miễn phí: liên hệ ngay VH Phước Zalo 0988474228')
 assert.equal(await page.getAttribute('#promo', 'href'), 'https://zalo.me/0988474228')
@@ -261,7 +261,7 @@ await page.fill('#content', 'Tiền ăn trưa')
 await page.click('[data-size="1024"]')
 const lp = await payload()
 assert.equal(lp, vietqr)
-for (const tpl of ['tree', 'luxury', 'gradient', 'tet']) {
+for (const tpl of ['tree', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'royal', 'midautumn']) {
   await page.click(`[data-template-btn="${tpl}"]`)
   await fillStaff(staffFull)
   assert.equal(await payload(), lp)
@@ -331,7 +331,7 @@ await page.selectOption('#bank', '970403')
 const treeStb = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
 assert.ok(!treeStb.includes('LỘC PHÁT') && treeStb.includes('>Sacombank</text>'), 'Cây Vàng: ngân hàng khác phải hiện tên ngân hàng đó thay khẩu hiệu LPBank')
 await page.selectOption('#bank', '970449')
-assert.equal((await page.locator('[data-template-btn]').count()), 9)
+assert.equal((await page.locator('[data-template-btn]').count()), 13)
 log('mẫu Cây Vàng: khẩu hiệu LPBank chỉ hiện với LPBank, Sacombank hiện "Sacombank"')
 
 // 1d. v1.2: card visit
@@ -434,6 +434,34 @@ const c2 = await counters()
 assert.deepEqual(c2, { ...c1, downloads: c1.downloads + 1 })
 log(`quản trị: tạo + tải 1 mã mới thì "đã tạo" ${c0.created} → ${c1.created}, "lượt tải" ${c0.downloads} → ${c2.downloads}; tải lại cùng mã chỉ tăng lượt tải`)
 await page.click('#nav-qr')
+
+// 4c. v1.3: gợi ý lưu ảnh chỉ hiện trên iOS
+assert.equal(await page.locator('#ios-hint').count(), 0, 'máy tính không được hiện gợi ý iOS')
+const UAS = {
+  iPhone: ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1', true],
+  iPad: ['Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1', true],
+  Android: ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', false],
+  Windows: ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', false],
+}
+for (const [name, [userAgent, expected]] of Object.entries(UAS)) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent, serviceWorkers: 'block' })
+  const p = await ctx.newPage()
+  await p.goto(base)
+  await p.fill('#account', '0123456789')
+  await p.waitForSelector('#share')
+  assert.equal(await p.locator('#ios-hint').count(), expected ? 1 : 0, name + ': gợi ý iOS sai')
+  if (expected) {
+    assert.equal((await p.textContent('#ios-hint')).trim(), 'iPhone: bấm Chia sẻ → Lưu hình ảnh')
+    const [hint, shareBtn] = [await p.locator('#ios-hint').boundingBox(), await p.locator('#share').boundingBox()]
+    assert.ok(hint.y >= shareBtn.y + shareBtn.height && hint.y - (shareBtn.y + shareBtn.height) < 24 && hint.height < 48, name + ': gợi ý phải nằm ngay dưới nút Chia sẻ, một dòng')
+    if (name === 'iPhone') {
+      await p.locator('#ios-hint').scrollIntoViewIfNeeded()
+      await p.screenshot({ path: `${OUT}/ios-hint-390.png` })
+    }
+  }
+  await ctx.close()
+}
+log('gợi ý "iPhone: bấm Chia sẻ → Lưu hình ảnh": hiện với iPhone + iPad, không hiện với Android + Windows + máy test')
 
 // 5. PWA + riêng tư
 assert.equal(await page.textContent('#app-version'), 'Tạo Mã QR Miễn Phí v' + JSON.parse(readFileSync('package.json', 'utf8')).version)
