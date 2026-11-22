@@ -1,13 +1,17 @@
 import { attr, canvasBlob, drawQR, loadImage, qrInner, type Logo, type QRModel, type QRStyle } from './render'
 import { onColor, shade } from './styles'
 
-export type Template = 'standard' | 'bank' | 'minimal' | 'business' | 'plain'
+export type Template = 'standard' | 'bank' | 'minimal' | 'business' | 'tree' | 'luxury' | 'gradient' | 'tet' | 'plain'
 
 export const TEMPLATES: { id: Template; label: string; hint: string }[] = [
   { id: 'standard', label: 'Chuẩn', hint: 'Thẻ trắng, logo ngân hàng phía trên' },
   { id: 'bank', label: 'Thẻ ngân hàng', hint: 'Nền màu thương hiệu, mã trên khung trắng' },
   { id: 'minimal', label: 'Tối giản', hint: 'Không nền, chỉ tên ngân hàng nhỏ' },
   { id: 'business', label: 'Doanh nghiệp', hint: 'Đầu thẻ màu thương hiệu, NV hỗ trợ trong khung riêng' },
+  { id: 'tree', label: 'Cây Vàng Lộc Phát', hint: 'Nền vàng, cây tiền vàng bên trái, mã trên khung trắng bên phải' },
+  { id: 'luxury', label: 'Vàng Sang Trọng', hint: 'Nền nâu đen, chữ và viền vàng' },
+  { id: 'gradient', label: 'Gradient Hiện Đại', hint: 'Nền chuyển màu xanh ngọc sang tím' },
+  { id: 'tet', label: 'Tết Lộc Phát', hint: 'Đỏ và vàng ngày Tết, đèn lồng và đồng tiền vàng' },
   { id: 'plain', label: 'Chỉ mã QR', hint: 'Ảnh vuông chỉ có mã, như bản 1.0' },
 ]
 
@@ -20,7 +24,11 @@ export const EMPTY_STAFF: Staff = { branch: '', name: '', phone: '' }
 
 export interface CardInput {
   template: Template
-  brand: { name: string; primary: string; accent: string; logo?: Logo }
+  brand: { name: string; primary: string; accent: string; logo?: Logo; tagline?: string }
+  /** số tài khoản (mẫu Cây Vàng in ở đầu khung mã) */
+  account?: string
+  /** logo VietQR + napas 247, chỉ dùng cho mã chuyển khoản */
+  marks?: { vietqr: Logo; napas: Logo }
   /** dòng hiển thị dưới mã (không nằm trong payload) */
   title?: string
   subtitle?: string
@@ -30,8 +38,9 @@ export interface CardInput {
 
 type Weight = 400 | 600 | 700
 type Node =
-  | { t: 'rect'; x: number; y: number; w: number; h: number; r?: number; fill: string; stroke?: string }
+  | { t: 'rect'; x: number; y: number; w: number; h: number; r?: number; fill: string; stroke?: string; sw?: number }
   | { t: 'grad'; x: number; y: number; w: number; h: number; r: number; from: string; to: string }
+  | { t: 'path'; d: string; fill?: string; stroke?: string; sw?: number }
   | { t: 'img'; x: number; y: number; w: number; h: number; src: string }
   | { t: 'text'; x: number; y: number; text: string; size: number; weight: Weight; fill: string; anchor: 'start' | 'middle' | 'end' }
   | { t: 'qr'; x: number; y: number; size: number }
@@ -44,6 +53,7 @@ export interface Card {
 
 export const CARD_W = 1000
 const FONT = `system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`
+export const BODY_SIZE = 40
 const INK = '#1F1F1F'
 const GRAY = '#525252'
 
@@ -60,6 +70,7 @@ function fit(text: string, maxW: number, size: number, weight: Weight): { text: 
   const w = measure(text, size, weight)
   if (w <= maxW) return { text, size }
   const scaled = Math.max(size * 0.6, (size * maxW) / w)
+  if (measure(text, scaled, weight) <= maxW + 0.5) return { text, size: Math.floor(scaled) }
   let out = text
   while (out.length > 4 && measure(out + '…', scaled, weight) > maxW) out = out.slice(0, -1)
   return { text: out === text ? text : out.trimEnd() + '…', size: Math.floor(scaled) }
@@ -83,14 +94,133 @@ function logoBox(logo: Logo, maxW: number, maxH: number) {
   return { w: logo.width * s, h: logo.height * s }
 }
 
+const n1 = (v: number) => Math.round(v * 10) / 10
+const circle = (cx: number, cy: number, r: number) => `M${n1(cx - r)} ${n1(cy)}a${n1(r)} ${n1(r)} 0 1 0 ${n1(2 * r)} 0a${n1(r)} ${n1(r)} 0 1 0 ${n1(-2 * r)} 0Z`
+const GOLD = '#F5C542'
+const GOLD_LIGHT = '#FFE58A'
+const GOLD_DARK = '#B07D12'
+const BROWN = '#4A2A12'
+
+/** đồng tiền vàng lỗ vuông */
+function coin(cx: number, cy: number, r: number): Node[] {
+  const k = r * 0.26
+  return [
+    { t: 'path', d: circle(cx, cy, r), fill: GOLD_DARK },
+    { t: 'path', d: circle(cx, cy, r * 0.84), fill: GOLD },
+    { t: 'path', d: circle(cx, cy, r * 0.62), fill: GOLD_LIGHT },
+    { t: 'path', d: `M${n1(cx - k)} ${n1(cy - k)}h${n1(2 * k)}v${n1(2 * k)}h${n1(-2 * k)}Z`, fill: GOLD_DARK },
+  ]
+}
+
+/** cây tiền vàng: chậu vàng, thân cành vàng sẫm, lá là các đồng tiền vàng. Vẽ hoàn toàn bằng path. */
+export function moneyTree(x: number, y: number, w: number, h: number): Node[] {
+  const X = (u: number) => n1(x + u * w)
+  const Y = (v: number) => n1(y + v * h)
+  const nodes: Node[] = []
+  const trunk = Math.max(10, w * 0.05)
+  // chậu
+  nodes.push({ t: 'path', d: `M${X(0.3)} ${Y(0.84)}L${X(0.7)} ${Y(0.84)}L${X(0.64)} ${Y(1)}L${X(0.36)} ${Y(1)}Z`, fill: GOLD_DARK })
+  nodes.push({ t: 'path', d: `M${X(0.34)} ${Y(0.87)}L${X(0.66)} ${Y(0.87)}L${X(0.62)} ${Y(0.98)}L${X(0.38)} ${Y(0.98)}Z`, fill: GOLD })
+  nodes.push({ t: 'rect', x: x + 0.26 * w, y: y + 0.81 * h, w: 0.48 * w, h: 0.045 * h, r: 0.02 * h, fill: GOLD_LIGHT, stroke: GOLD_DARK, sw: 3 })
+  // thân + cành
+  const limb = (d: string, k: number): Node => ({ t: 'path', d, stroke: '#8A5A12', sw: trunk * k })
+  nodes.push(limb(`M${X(0.5)} ${Y(0.82)}C${X(0.46)} ${Y(0.66)} ${X(0.56)} ${Y(0.56)} ${X(0.5)} ${Y(0.34)}`, 1))
+  nodes.push(limb(`M${X(0.5)} ${Y(0.62)}C${X(0.36)} ${Y(0.54)} ${X(0.26)} ${Y(0.5)} ${X(0.18)} ${Y(0.36)}`, 0.6))
+  nodes.push(limb(`M${X(0.52)} ${Y(0.58)}C${X(0.66)} ${Y(0.52)} ${X(0.76)} ${Y(0.46)} ${X(0.82)} ${Y(0.34)}`, 0.6))
+  nodes.push(limb(`M${X(0.5)} ${Y(0.46)}C${X(0.42)} ${Y(0.36)} ${X(0.36)} ${Y(0.28)} ${X(0.32)} ${Y(0.16)}`, 0.5))
+  nodes.push(limb(`M${X(0.51)} ${Y(0.44)}C${X(0.6)} ${Y(0.34)} ${X(0.64)} ${Y(0.26)} ${X(0.68)} ${Y(0.16)}`, 0.5))
+  // tán lá = đồng tiền (vị trí cố định để ảnh xuất ra luôn giống nhau)
+  const leaves: [number, number, number][] = [
+    [0.5, 0.08, 1.1], [0.32, 0.12, 1], [0.68, 0.12, 1], [0.18, 0.22, 0.9], [0.82, 0.22, 0.9], [0.42, 0.2, 0.95], [0.59, 0.2, 0.95],
+    [0.1, 0.36, 0.9], [0.9, 0.36, 0.9], [0.27, 0.32, 1], [0.73, 0.32, 1], [0.5, 0.28, 1.05], [0.2, 0.47, 0.85], [0.8, 0.46, 0.85],
+    [0.37, 0.42, 0.9], [0.63, 0.41, 0.9], [0.3, 0.57, 0.75], [0.71, 0.56, 0.75],
+  ]
+  const r = Math.min(w * 0.085, h * 0.075)
+  for (const [u, v, k] of leaves) nodes.push(...coin(x + u * w, y + v * h, r * k))
+  // vài đồng tiền rơi cạnh chậu
+  nodes.push(...coin(x + 0.16 * w, y + 0.97 * h, r * 0.7), ...coin(x + 0.84 * w, y + 0.97 * h, r * 0.7), ...coin(x + 0.25 * w, y + 0.985 * h, r * 0.55))
+  return nodes
+}
+
+function lantern(cx: number, top: number, s: number): Node[] {
+  const cy = top + 150 * s
+  const rx = 46 * s
+  const ry = 56 * s
+  const body = `M${n1(cx - rx)} ${n1(cy)}a${n1(rx)} ${n1(ry)} 0 1 0 ${n1(2 * rx)} 0a${n1(rx)} ${n1(ry)} 0 1 0 ${n1(-2 * rx)} 0Z`
+  const rib = (k: number) => `M${n1(cx)} ${n1(cy - ry)}C${n1(cx + rx * k)} ${n1(cy - ry * 0.5)} ${n1(cx + rx * k)} ${n1(cy + ry * 0.5)} ${n1(cx)} ${n1(cy + ry)}`
+  return [
+    { t: 'path', d: `M${n1(cx)} ${n1(top)}V${n1(cy - ry)}`, stroke: GOLD, sw: 4 * s },
+    { t: 'path', d: body, fill: '#E5262D', stroke: GOLD, sw: 4 * s },
+    { t: 'path', d: rib(0.75) + rib(-0.75) + rib(0), stroke: GOLD, sw: 2.5 * s },
+    { t: 'rect', x: cx - 24 * s, y: cy - ry - 8 * s, w: 48 * s, h: 14 * s, r: 5 * s, fill: GOLD },
+    { t: 'rect', x: cx - 24 * s, y: cy + ry - 6 * s, w: 48 * s, h: 14 * s, r: 5 * s, fill: GOLD },
+    { t: 'path', d: `M${n1(cx)} ${n1(cy + ry + 8 * s)}v${n1(46 * s)}M${n1(cx - 9 * s)} ${n1(cy + ry + 8 * s)}v${n1(34 * s)}M${n1(cx + 9 * s)} ${n1(cy + ry + 8 * s)}v${n1(34 * s)}`, stroke: GOLD, sw: 3 * s },
+  ]
+}
+
+interface PanelTheme {
+  from: string
+  to: string
+  on: string
+  line: string
+  strong: string
+  staffW: number
+  deco?: (W: number, H: number) => Node[]
+}
+function panelTheme(template: Template, brand: CardInput['brand'], strong: string): PanelTheme | undefined {
+  if (template === 'bank') return { from: brand.primary, to: shade(brand.primary, -0.38), on: onColor(brand.primary), line: brand.accent, strong, staffW: 880 }
+  if (template === 'luxury')
+    return {
+      from: '#2E1B0E',
+      to: '#0C0705',
+      on: '#EBCB73',
+      line: '#EBCB73',
+      strong: '#8A6510',
+      staffW: 840,
+      deco: (W, H) => [
+        { t: 'rect', x: 16, y: 16, w: W - 32, h: H - 32, r: 36, fill: 'none', stroke: '#D4AF37', sw: 4 },
+        { t: 'rect', x: 28, y: 28, w: W - 56, h: H - 56, r: 28, fill: 'none', stroke: '#8A6A1E', sw: 1.5 },
+      ],
+    }
+  if (template === 'gradient') return { from: '#0E9AA7', to: '#6A2BD9', on: '#FFFFFF', line: '#FDE68A', strong: '#5B21B6', staffW: 880 }
+  if (template === 'tet')
+    return {
+      from: '#D8161F',
+      to: '#8C0A13',
+      on: '#FFE08A',
+      line: GOLD,
+      strong: '#B3121B',
+      staffW: 700,
+      deco: (W, H) => [
+        ...lantern(78, 0, 0.8),
+        ...lantern(W - 78, 0, 0.8),
+        ...coin(64, H - 62, 34),
+        ...coin(112, H - 40, 22),
+        ...coin(W - 64, H - 62, 34),
+        ...coin(W - 112, H - 40, 22),
+      ],
+    }
+}
+
+/** hàng logo VietQR + napas 247 căn giữa quanh cx; trả về chiều cao đã dùng */
+function marksRow(nodes: Node[], marks: NonNullable<CardInput['marks']>, cx: number, y: number, h: number): void {
+  const a = logoBox(marks.vietqr, 400, h)
+  const b = logoBox(marks.napas, 400, h * 0.62)
+  const gap = h * 0.7
+  const x0 = cx - (a.w + gap + b.w) / 2
+  nodes.push({ t: 'img', x: x0, y: y + (h - a.h) / 2, w: a.w, h: a.h, src: marks.vietqr.src })
+  nodes.push({ t: 'rect', x: x0 + a.w + gap / 2 - 1, y: y + h * 0.15, w: 2, h: h * 0.7, fill: '#D4D4D4' })
+  nodes.push({ t: 'img', x: x0 + a.w + gap, y: y + (h - b.h) / 2, w: b.w, h: b.h, src: marks.napas.src })
+}
+
 export function layoutCard(input: CardInput): Card {
   const { template, brand } = input
   const nodes: Node[] = []
   const W = CARD_W
   const cx = W / 2
-  const body = template === 'minimal' ? 34 : 40
+  const body = template === 'minimal' ? 34 : BODY_SIZE
   const staffSize = Math.round(body * STAFF_SCALE)
-  const staff = staffLines(input.staff, template === 'business' ? 790 : 860, staffSize)
+  const staff = staffLines(input.staff, template === 'business' ? 790 : template === 'tet' ? 700 : 840, staffSize)
   let y = 0
 
   const text = (s: string, x: number, size: number, weight: Weight, fill: string, anchor: 'start' | 'middle' | 'end', maxW: number, gap = 0.45) => {
@@ -106,9 +236,54 @@ export function layoutCard(input: CardInput): Card {
   }
   const strong = onColor(brand.primary) === '#FFFFFF' ? brand.primary : shade(brand.primary, -0.45)
 
-  if (template === 'bank') {
-    const on = onColor(brand.primary)
-    nodes.push({ t: 'grad', x: 0, y: 0, w: W, h: 0, r: 48, from: brand.primary, to: shade(brand.primary, -0.38) })
+  const theme = panelTheme(template, brand, strong)
+  if (template === 'tree') {
+    const bg: Node = { t: 'grad', x: 0, y: 0, w: W, h: 0, r: 44, from: '#FBE9A6', to: '#D9A21B' }
+    const border: Node = { t: 'rect', x: 5, y: 5, w: W - 10, h: 0, r: 40, fill: 'none', stroke: BROWN, sw: 6 }
+    nodes.push(bg, border)
+    // khung mã bên phải
+    const px = 430
+    const pw = 520
+    const pcx = px + pw / 2
+    const panel: Node = { t: 'rect', x: px, y: 46, w: pw, h: 0, r: 36, fill: '#FFFFFF', stroke: '#C99A1E', sw: 3 }
+    nodes.push(panel)
+    y = 46 + 26
+    if (input.account) text(input.account, pcx, body, 700, '#A97600', 'middle', pw - 60, 0.35)
+    if (input.title) text(input.title, pcx, body, 700, BROWN, 'middle', pw - 60, 0.4)
+    y += 6
+    nodes.push({ t: 'qr', x: px + 40, y, size: pw - 80 })
+    y += pw - 80 + 12
+    if (input.amount) text(input.amount, pcx, body, 700, BROWN, 'middle', pw - 60, 0.4)
+    if (input.marks) {
+      marksRow(nodes, input.marks, pcx, y, 56)
+      y += 56
+    }
+    y += 26
+    panel.h = y - 46
+    const bottom = y
+    // cột trái: logo, khẩu hiệu / tên ngân hàng, cây vàng
+    y = 52
+    if (brand.logo) {
+      const l = logoBox(brand.logo, 280, 64)
+      nodes.push({ t: 'rect', x: 220 - l.w / 2 - 24, y, w: l.w + 48, h: 92, r: 24, fill: '#FFFFFF' })
+      nodes.push({ t: 'img', x: 220 - l.w / 2, y: y + 46 - l.h / 2, w: l.w, h: l.h, src: brand.logo.src })
+      y += 92 + 18
+    }
+    text(brand.tagline ?? brand.name, 220, brand.tagline ? 22 : 34, 700, BROWN, 'middle', 370, 0.5)
+    y += 10
+    nodes.push(...moneyTree(60, y, 320, bottom - y - 6))
+    y = bottom
+    if (staff.length) {
+      y += 24
+      for (const line of staff) text(line, cx, staffSize, 600, BROWN, 'middle', 900)
+      y -= 4
+    }
+    y += 40
+    bg.h = y
+    border.h = y - 10
+  } else if (theme) {
+    const on = theme.on
+    nodes.push({ t: 'grad', x: 0, y: 0, w: W, h: 0, r: 48, from: theme.from, to: theme.to })
     y = 60
     if (brand.logo) {
       const l = logoBox(brand.logo, 400, 96)
@@ -120,7 +295,7 @@ export function layoutCard(input: CardInput): Card {
       y += 20
       text(brand.name, cx, 76, 700, on, 'middle', 840, 0.5)
     }
-    nodes.push({ t: 'rect', x: cx - 80, y, w: 160, h: 8, r: 4, fill: brand.accent })
+    nodes.push({ t: 'rect', x: cx - 80, y, w: 160, h: 8, r: 4, fill: theme.line })
     y += 8 + 36
     const top = y
     const panel: Node = { t: 'rect', x: 90, y: top, w: 820, h: 0, r: 44, fill: '#FFFFFF' }
@@ -128,15 +303,16 @@ export function layoutCard(input: CardInput): Card {
     y += 40
     nodes.push({ t: 'qr', x: 130, y, size: 740 })
     y += 740 + 16
-    info(body, INK, GRAY, strong, 740)
+    info(body, INK, GRAY, theme.strong, 740)
     y += 24
     panel.h = y - top
     if (staff.length) {
       y += 30
-      for (const line of staff) text(line, cx, staffSize, 600, on, 'middle', 880)
+      for (const line of staff) text(line, cx, staffSize, 600, on, 'middle', theme.staffW)
     }
     y += 56
     ;(nodes[0] as { h: number }).h = y
+    if (theme.deco) nodes.splice(1, 0, ...theme.deco(W, y))
   } else if (template === 'minimal') {
     y = 24
     text(brand.name, cx, 34, 600, GRAY, 'middle', 860, 0.6)
@@ -218,7 +394,9 @@ export function cardSVG(card: Card, model: QRModel, style: QRStyle, logo: Logo |
     .map((nd, i) => {
       switch (nd.t) {
         case 'rect':
-          return `<rect x="${r2(nd.x)}" y="${r2(nd.y)}" width="${r2(nd.w)}" height="${r2(nd.h)}"${nd.r ? ` rx="${nd.r}"` : ''} fill="${nd.fill}"${nd.stroke ? ` stroke="${nd.stroke}" stroke-width="2"` : ''}/>`
+          return `<rect x="${r2(nd.x)}" y="${r2(nd.y)}" width="${r2(nd.w)}" height="${r2(nd.h)}"${nd.r ? ` rx="${nd.r}"` : ''} fill="${nd.fill}"${nd.stroke ? ` stroke="${nd.stroke}" stroke-width="${nd.sw ?? 2}"` : ''}/>`
+        case 'path':
+          return `<path d="${nd.d}" fill="${nd.fill ?? 'none'}"${nd.stroke ? ` stroke="${nd.stroke}" stroke-width="${r2(nd.sw ?? 2)}" stroke-linecap="round"` : ''}/>`
         case 'grad':
           return (
             `<defs><linearGradient id="g${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${nd.from}"/><stop offset="1" stop-color="${nd.to}"/></linearGradient></defs>` +
@@ -261,12 +439,26 @@ export async function cardPNG(card: Card, model: QRModel, style: QRStyle, logo: 
   for (const nd of card.nodes) {
     if (nd.t === 'rect') {
       roundRect(ctx, nd.x, nd.y, nd.w, nd.h, nd.r)
-      ctx.fillStyle = nd.fill
-      ctx.fill()
+      if (nd.fill !== 'none') {
+        ctx.fillStyle = nd.fill
+        ctx.fill()
+      }
       if (nd.stroke) {
         ctx.strokeStyle = nd.stroke
-        ctx.lineWidth = 2
+        ctx.lineWidth = nd.sw ?? 2
         ctx.stroke()
+      }
+    } else if (nd.t === 'path') {
+      const path = new Path2D(nd.d)
+      if (nd.fill) {
+        ctx.fillStyle = nd.fill
+        ctx.fill(path)
+      }
+      if (nd.stroke) {
+        ctx.strokeStyle = nd.stroke
+        ctx.lineWidth = nd.sw ?? 2
+        ctx.lineCap = 'round'
+        ctx.stroke(path)
       }
     } else if (nd.t === 'grad') {
       const g = ctx.createLinearGradient(nd.x, nd.y, nd.x + nd.w, nd.y + nd.h)
@@ -289,4 +481,79 @@ export async function cardPNG(card: Card, model: QRModel, style: QRStyle, logo: 
     }
   }
   return canvasBlob(canvas)
+}
+
+export type BizTemplate = 'lpbank' | 'luxury'
+export const BIZ_TEMPLATES: { id: BizTemplate; label: string }[] = [
+  { id: 'lpbank', label: 'LPBank' },
+  { id: 'luxury', label: 'Vàng Sang Trọng' },
+]
+export interface BizInfo {
+  name: string
+  title: string
+  branch: string
+  phone: string
+  zalo: string
+  email: string
+}
+export const EMPTY_BIZ: BizInfo = { name: '', title: '', branch: '', phone: '', zalo: '', email: '' }
+export const BIZ_W = 1050
+export const BIZ_H = 600
+
+/** Card visit tỉ lệ 3.5:2. Ô trống không in; không có mã thì không có khung mã. */
+export function layoutBizCard(template: BizTemplate, info: BizInfo, hasQR: boolean, logo?: Logo): Card {
+  const W = BIZ_W
+  const H = BIZ_H
+  const nodes: Node[] = []
+  const lux = template === 'luxury'
+  const c = lux
+    ? { name: '#EBCB73', title: '#D4AF37', line: '#F3E3B0', label: '#B9973F', caption: '#6B4E0F' }
+    : { name: '#6D371A', title: '#C97A06', line: INK, label: GRAY, caption: '#6D371A' }
+  let y: number
+  if (lux) {
+    nodes.push({ t: 'grad', x: 0, y: 0, w: W, h: H, r: 28, from: '#2E1B0E', to: '#0C0705' })
+    nodes.push({ t: 'rect', x: 14, y: 14, w: W - 28, h: H - 28, r: 20, fill: 'none', stroke: '#D4AF37', sw: 3 })
+    nodes.push({ t: 'rect', x: 24, y: 24, w: W - 48, h: H - 48, r: 14, fill: 'none', stroke: '#8A6A1E', sw: 1.5 })
+    nodes.push({ t: 'rect', x: 64, y: 84, w: 90, h: 6, r: 3, fill: '#D4AF37' })
+    y = 120
+  } else {
+    nodes.push({ t: 'rect', x: 1, y: 1, w: W - 2, h: H - 2, r: 28, fill: '#FFFFFF', stroke: '#D4D4D4' })
+    nodes.push({ t: 'rect', x: 0, y: 0, w: W, h: 124, r: 28, fill: '#6D371A' })
+    nodes.push({ t: 'rect', x: 0, y: 60, w: W, h: 64, fill: '#6D371A' })
+    nodes.push({ t: 'rect', x: 0, y: 124, w: W, h: 8, fill: '#F99D1C' })
+    if (logo) {
+      const l = logoBox(logo, 260, 56)
+      nodes.push({ t: 'rect', x: 50, y: 24, w: l.w + 44, h: 78, r: 18, fill: '#FFFFFF' })
+      nodes.push({ t: 'img', x: 72, y: 63 - l.h / 2, w: l.w, h: l.h, src: logo.src })
+    }
+    y = 164
+  }
+  const maxW = hasQR ? 600 : 920
+  const text = (s: string, size: number, weight: Weight, fill: string, gap: number) => {
+    const f = fit(s, maxW, size, weight)
+    y += size
+    nodes.push({ t: 'text', x: 64, y, text: f.text, size: f.size, weight, fill, anchor: 'start' })
+    y += gap
+  }
+  const v = (k: keyof BizInfo) => info[k].trim()
+  if (v('name')) text(v('name'), 62, 700, c.name, 14)
+  if (v('title')) text(v('title'), 34, 600, c.title, 12)
+  y += 18
+  const lines: [string, string][] = [
+    ['Chi nhánh', v('branch')],
+    ['ĐT', v('phone')],
+    ['Zalo', v('zalo')],
+    ['Email', v('email')],
+  ]
+  for (const [label, value] of lines) if (value) text(`${label}: ${value}`, 32, 400, c.line, 18)
+  if (hasQR) {
+    const size = 270
+    const px = W - 64 - size - 40
+    const py = lux ? 96 : 166
+    nodes.push({ t: 'rect', x: px, y: py, w: size + 40, h: size + 84, r: 24, fill: '#FFFFFF', stroke: lux ? '#D4AF37' : '#F99D1C', sw: 3 })
+    nodes.push({ t: 'qr', x: px + 20, y: py + 20, size })
+    const cap = fit('Quét để chuyển khoản', size, 24, 600)
+    nodes.push({ t: 'text', x: px + 20 + size / 2, y: py + size + 58, text: cap.text, size: cap.size, weight: 600, fill: c.caption, anchor: 'middle' })
+  }
+  return { w: W, h: H, nodes }
 }

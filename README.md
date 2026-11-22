@@ -5,6 +5,16 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.2.0
+
+- **4 mẫu thẻ QR mới** (tổng 8, cùng mẫu "Chỉ mã QR"): Cây Vàng Lộc Phát, Vàng Sang Trọng, Gradient Hiện Đại, Tết Lộc Phát. Cây vàng, đồng tiền, đèn lồng đều vẽ bằng SVG, không dùng ảnh chụp.
+- **Card visit**: danh thiếp tỉ lệ 3.5:2 (PNG 2100×1200 + SVG), 2 mẫu (LPBank, Vàng Sang Trọng), gắn mã QR từ lịch sử hoặc tạo VietQR mới ngay tại chỗ.
+- **Quản trị**: thống kê lưu trên máy (số mã đã tạo, theo ngân hàng, theo loại, lượt tải, số card visit). Không đăng nhập, không máy chủ.
+
+## What's new in v1.2.0
+
+Four new card templates (Golden Money Tree, Luxury Gold, Modern Gradient, Festive Tet), a business-card maker (3.5:2, PNG + SVG, QR from history or a new VietQR) and a local-only statistics page. Still 100% client-side.
+
 ## Mới ở v1.1.1
 
 - Thông tin nhân viên in trên thẻ thành một dòng nhỏ "NV hỗ trợ: Tên — Chi nhánh — SĐT" (65% cỡ chữ nội dung thẻ).

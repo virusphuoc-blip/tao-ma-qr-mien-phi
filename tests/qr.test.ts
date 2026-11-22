@@ -167,19 +167,20 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     expect(staffLines({ branch: 'Chi nhánh Thành phố Hồ Chí Minh – PGD Bến Thành', name: 'Nguyễn Hoàng Thị Phương Thảo', phone: '0901234567' }, 860, 26)).toHaveLength(2)
   })
 
-  it('cả 4 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
+  it('cả 8 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
     const payload = buildVietQR({ bin: '970403', account: '0123456789', amount: '100000', content: 'Tien an trua' })
     const model = buildModel(payload, DEFAULT_STYLE)
     const brand = { name: 'Sacombank', primary: '#0065A4', accent: '#F3B643' }
     for (const { id } of TEMPLATES.filter((t) => t.id !== 'plain')) {
       for (const staff of [{ branch: 'CN Sài Gòn', name: 'Trần Thị B', phone: '0901234567' }, { branch: '', name: '', phone: '' }]) {
-        const svg = cardSVG(layoutCard({ template: id, brand, subtitle: 'Sacombank · 0123456789', staff }), model, DEFAULT_STYLE, undefined, 800)
+        const svg = cardSVG(layoutCard({ template: id, brand, account: '0123456789', subtitle: 'Sacombank · 0123456789', staff }), model, DEFAULT_STYLE, undefined, 800)
         const img = new Resvg(svg).render()
         expect(jsQR(new Uint8ClampedArray(img.pixels), img.width, img.height)?.data, id).toBe(payload)
-        expect(svg.includes('>NV hỗ trợ: Trần Thị B — CN Sài Gòn — 0901234567</text>'), id).toBe(!!staff.name)
+        // mẫu Tết chừa chỗ cho đồng tiền ở hai góc nên dòng dài tách làm hai
+        if (id !== 'tet') expect(svg.includes('>NV hỗ trợ: Trần Thị B — CN Sài Gòn — 0901234567</text>'), id).toBe(!!staff.name)
         expect(svg.includes('NV hỗ trợ'), id).toBe(!!staff.name)
         const sizes = (re: RegExp) => [...svg.matchAll(re)].map((m) => Number(m[1]))
-        const bodySize = Math.max(...sizes(/font-size="(\d+)"[^>]*>Sacombank · 0123456789</g))
+        const bodySize = Math.max(...sizes(id === 'tree' ? /font-size="(\d+)"[^>]*>0123456789</g : /font-size="(\d+)"[^>]*>Sacombank · 0123456789</g))
         if (staff.name) {
           const ratio = sizes(/font-size="(\d+)"[^>]*>NV hỗ trợ/g)[0] / bodySize
           expect(ratio, id).toBeGreaterThanOrEqual(0.6)
@@ -187,6 +188,40 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
         }
         expect(svg).not.toMatch(/null|undefined|NaN/)
       }
+    }
+  })
+
+  it('v1.2: có đủ 8 mẫu thẻ + "Chỉ mã QR"; Cây Vàng vẽ bằng path, khẩu hiệu chỉ khi được truyền vào', () => {
+    expect(TEMPLATES.map((t) => t.id)).toEqual(['standard', 'bank', 'minimal', 'business', 'tree', 'luxury', 'gradient', 'tet', 'plain'])
+    const model = buildModel('x', DEFAULT_STYLE)
+    const staff = { branch: '', name: '', phone: '' }
+    const tree = (tagline?: string) =>
+      cardSVG(layoutCard({ template: 'tree', brand: { name: 'Sacombank', primary: '#0065A4', accent: '#F3B643', tagline }, account: '0123456789', title: 'NGUYEN VAN A', staff }), model, DEFAULT_STYLE, undefined, 800)
+    const lp = tree('NGÂN HÀNG LỘC PHÁT VIỆT NAM')
+    expect(lp).toContain('>NGÂN HÀNG LỘC PHÁT VIỆT NAM</text>')
+    expect(lp).not.toContain('>Sacombank</text>')
+    expect(tree()).toContain('>Sacombank</text>')
+    expect(tree()).not.toContain('LỘC PHÁT')
+    expect((lp.match(/<path /g) ?? []).length).toBeGreaterThan(80)
+    expect(lp).not.toContain('<image')
+  })
+
+  it('v1.2: card visit 3.5:2, mã quét được, ô trống không in', async () => {
+    const { layoutBizCard, BIZ_TEMPLATES, EMPTY_BIZ } = await import('../src/lib/card')
+    const payload = buildVietQR({ bin: '970449', account: '0123456789' })
+    const model = buildModel(payload, DEFAULT_STYLE)
+    for (const { id } of BIZ_TEMPLATES) {
+      const card = layoutBizCard(id, { ...EMPTY_BIZ, name: 'Võ Hoàng Phước', phone: '0988474228' }, true)
+      expect(card.w / card.h).toBe(3.5 / 2)
+      const svg = cardSVG(card, model, DEFAULT_STYLE, undefined, 2100)
+      const img = new Resvg(svg).render()
+      expect([img.width, img.height]).toEqual([2100, 1200])
+      expect(jsQR(new Uint8ClampedArray(img.pixels), img.width, img.height)?.data, id).toBe(payload)
+      expect(svg).toContain('>Võ Hoàng Phước</text>')
+      expect(svg).toContain('>ĐT: 0988474228</text>')
+      expect(svg).not.toMatch(/Chi nhánh|Zalo|Email|null|undefined|NaN/)
+      const noQR = cardSVG(layoutBizCard(id, { ...EMPTY_BIZ, name: 'A' }, false), model, DEFAULT_STYLE, undefined, 1050)
+      expect(noQR).not.toContain('chuyển khoản')
     }
   })
 
