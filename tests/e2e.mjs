@@ -231,7 +231,7 @@ assert.equal(await page.locator('#clear-staff').count(), 0)
 log('thông tin cán bộ: còn sau khi tải lại trang, nút Xóa xóa sạch')
 
 const footer = (await page.textContent('footer')).replace(/\s+/g, ' ')
-assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.1'))
+assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.2'))
 assert.doesNotMatch(footer, /không phải sản phẩm|Công cụ miễn phí/)
 assert.equal((await page.textContent('#promo')).replace(/\s+/g, ' ').trim(), 'Mở TK LPBank miễn phí: liên hệ ngay VH Phước Zalo 0988474228')
 assert.equal(await page.getAttribute('#promo', 'href'), 'https://zalo.me/0988474228')
@@ -287,7 +287,7 @@ for (const tpl of ['tree', 'treeA6', 'luxury', 'gradient', 'tet', 'nature', 'oce
     assert.ok(svg.includes('>NGUYEN VAN A</text>') && svg.includes('>0123456789</text>'))
     assert.equal((svg.match(/<image /g) ?? []).length, 4)
     assert.ok((svg.match(/<path /g) ?? []).length > 80, 'A6: cây vàng phải được vẽ bằng path')
-    assert.ok(near(png, '#F5C542', 30) > 0.01, 'A6: thiếu màu vàng')
+    assert.ok(near(png, '#F5C542', 30) > 0.005, 'A6: thiếu màu vàng')
     const out = await page.evaluate(() => {
       const c = document.querySelector('#qr-preview > svg').getBoundingClientRect()
       const ts = [...document.querySelectorAll('#qr-preview > svg text')].map((e) => e.getBoundingClientRect())
@@ -295,6 +295,28 @@ for (const tpl of ['tree', 'treeA6', 'luxury', 'gradient', 'tet', 'nature', 'oce
       return { over: ts.filter((r) => r.left < c.left + 4 || r.right > c.right - 4 || r.top < c.top || r.bottom > c.bottom).length, clash, n: ts.length }
     })
     assert.ok(out.n >= 4 && out.over === 0 && !out.clash, 'A6: chữ tràn hoặc chèn nhau ' + JSON.stringify(out))
+    // v1.4.2: lề an toàn ≥ 5 mm (50/1050 chiều rộng) cho mọi chi tiết trừ nền + viền
+    const safe = await page.evaluate(() => {
+      const root = document.querySelector('#qr-preview > svg')
+      const els = [...root.children].filter((e) => e.tagName !== 'defs')
+      let l = 1e9, t = 1e9, r = 0, b = 0
+      for (const e of els) {
+        const box = e.tagName === 'svg' ? { x: +e.getAttribute('x'), y: +e.getAttribute('y'), width: +e.getAttribute('width'), height: +e.getAttribute('height') } : e.getBBox()
+        if (!box.width || !box.height || box.width >= 1030) continue // bỏ nền + viền thẻ
+        l = Math.min(l, box.x); t = Math.min(t, box.y); r = Math.max(r, box.x + box.width); b = Math.max(b, box.y + box.height)
+      }
+      return { n: els.length, left: l / 10, top: t / 10, right: (1050 - r) / 10, bottom: (1480 - b) / 10 }
+    })
+    assert.ok(safe.n > 80 && Math.min(safe.left, safe.top, safe.right, safe.bottom) >= 5, 'A6: có chi tiết cách mép dưới 5 mm ' + JSON.stringify(safe))
+    // đo trực tiếp trên PNG: khung trắng cách mép phải ≥ 5 mm
+    const img = PNG.sync.read(readFileSync(png))
+    const row = Math.round(img.height * 0.6)
+    let x = img.width - 1
+    const white = (px) => img.data[(row * img.width + px) * 4] > 250 && img.data[(row * img.width + px) * 4 + 1] > 250 && img.data[(row * img.width + px) * 4 + 2] > 250
+    while (x > 0 && !white(x)) x--
+    const rightMm = ((img.width - 1 - x) / img.width) * 105
+    assert.ok(rightMm >= 5 && rightMm < 12, 'A6: khung trắng cách mép phải ' + rightMm.toFixed(2) + ' mm')
+    log(`A6 dọc: lề đo trên bản xem trước (mm) trái ${safe.left.toFixed(1)}, trên ${safe.top.toFixed(1)}, phải ${safe.right.toFixed(1)}, dưới ${safe.bottom.toFixed(1)}; khung trắng trên PNG cách mép phải ${rightMm.toFixed(1)} mm`)
     const big = decodePng(await (async () => { await page.click('[data-size="2048"]'); const f = await download('#dl-png', 'png'); await page.click('[data-size="1024"]'); return f })())
     assert.equal(big.text, lp)
     assert.equal(big.width, 2048)
@@ -595,7 +617,7 @@ for (const [name, [userAgent, app, how]] of Object.entries(INAPP)) {
 log('thông báo trình duyệt trong ứng dụng: hiện với Zalo / Facebook / Messenger (Android + iPhone), đóng được; không hiện với Chrome, Safari, Cốc Cốc')
 
 // 4d. v1.3: footer bản quyền + phiên bản ở mọi màn hình, SEO, sitemap, robots
-const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.1'
+const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.2'
 for (const nav of ['#nav-qr', '#nav-card', '#nav-admin']) {
   await page.click(nav)
   assert.ok((await page.textContent('footer')).replace(/\s+/g, ' ').includes(COPY), nav + ': thiếu footer bản quyền')

@@ -5,6 +5,10 @@ Công cụ tạo mã QR miễn phí, chạy 100% trên trình duyệt. Không đ
 > Công cụ miễn phí, không phải sản phẩm chính thức của LPBank.
 > Mọi dữ liệu chỉ xử lý trên trình duyệt của bạn, không gửi lên máy chủ.
 
+## Mới ở v1.4.2
+
+- Mẫu "Cây Kim Tiền — A6 dọc": lề an toàn 7 mm quanh thẻ (khung mã QR, cây vàng, dòng NV hỗ trợ) để in tràn lề không bị cắt.
+
 ## Mới ở v1.4.1
 
 - **Mẫu thẻ "Cây Kim Tiền — A6 dọc"**: khổ A6 dọc 105 × 148 mm (ảnh xuất đúng tỉ lệ, PNG 2048px ≈ 495 dpi), cùng cây vàng và tông màu với mẫu Cây Vàng Lộc Phát khổ ngang. Dòng dưới logo là tên tiếng Việt đầy đủ của ngân hàng.

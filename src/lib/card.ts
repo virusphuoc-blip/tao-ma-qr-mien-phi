@@ -350,8 +350,10 @@ export function layoutCard(input: CardInput): Card {
     const AW = 1050
     const AH = 1480
     const acx = AW / 2
-    const px = 370
-    const pw = 640
+    // lề an toàn 7 mm (70 đơn vị) mỗi cạnh để in tràn lề không bị cắt
+    const SAFE = 70
+    const pw = 600
+    const px = AW - SAFE - pw
     const pcx = px + pw / 2
     const build = (y0: number) => {
       nodes.length = 0
@@ -366,14 +368,14 @@ export function layoutCard(input: CardInput): Card {
       }
       const name = brand.fullName ?? brand.name
       const words = name.split(' ')
-      if (measure(name, 40, 700) <= 930 || words.length < 4) text(name, acx, 46, 700, BROWN, 'middle', 930, 0.5)
+      if (measure(name, 40, 700) <= 890 || words.length < 4) text(name, acx, 46, 700, BROWN, 'middle', 890, 0.5)
       else {
         let cut = 1
         const half = measure(name, 42, 700) / 2
         for (let i = 1; i < words.length; i++)
           if (Math.abs(measure(words.slice(0, i).join(' '), 42, 700) - half) < Math.abs(measure(words.slice(0, cut).join(' '), 42, 700) - half)) cut = i
-        text(words.slice(0, cut).join(' '), acx, 42, 700, BROWN, 'middle', 930, 0.3)
-        text(words.slice(cut).join(' '), acx, 42, 700, BROWN, 'middle', 930, 0.5)
+        text(words.slice(0, cut).join(' '), acx, 42, 700, BROWN, 'middle', 890, 0.3)
+        text(words.slice(cut).join(' '), acx, 42, 700, BROWN, 'middle', 890, 0.5)
       }
       nodes.push({ t: 'rect', x: acx - 80, y, w: 160, h: 8, r: 4, fill: BROWN })
       y += 8 + 30
@@ -384,8 +386,8 @@ export function layoutCard(input: CardInput): Card {
       if (input.account) text(input.account, pcx, body, 700, '#A97600', 'middle', pw - 60, 0.35)
       if (input.title) text(input.title, pcx, body, 700, BROWN, 'middle', pw - 60, 0.4)
       y += 6
-      nodes.push({ t: 'qr', x: px + 40, y, size: pw - 80 })
-      y += pw - 80 + 14
+      nodes.push({ t: 'qr', x: px + 26, y, size: pw - 52 })
+      y += pw - 52 + 14
       if (input.amount) text(input.amount, pcx, body, 700, BROWN, 'middle', pw - 60, 0.4)
       if (input.marks) {
         marksRow(nodes, input.marks, pcx, y, 60)
@@ -394,16 +396,16 @@ export function layoutCard(input: CardInput): Card {
       y += 26
       panel.h = y - top
       const treeH = Math.min(y - top, 720)
-      nodes.push(...moneyTree(34, y - treeH, 310, treeH - 6))
+      nodes.push(...moneyTree(SAFE, y - treeH, 290, treeH - 6))
       if (staff.length) {
         y += 30
-        for (const line of staff) text(line, acx, staffSize, 600, BROWN, 'middle', 940)
+        for (const line of staff) text(line, acx, staffSize, 600, BROWN, 'middle', AW - 2 * SAFE)
         y -= 4
       }
       return y
     }
     const used = build(0)
-    build(Math.max(44, (AH - used) / 2))
+    build(Math.max(SAFE, (AH - used) / 2))
     return { w: AW, h: AH, nodes }
   }
   if (template === 'tree') {
