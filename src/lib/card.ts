@@ -2,7 +2,7 @@ import { facebookText } from './contact'
 import { attr, canvasBlob, drawQR, loadImage, qrInner, type Logo, type QRModel, type QRStyle } from './render'
 import { onColor, shade } from './styles'
 
-export type Template = 'standard' | 'bank' | 'minimal' | 'business' | 'tree' | 'luxury' | 'gradient' | 'tet' | 'nature' | 'ocean' | 'royal' | 'midautumn' | 'plain'
+export type Template = 'standard' | 'bank' | 'minimal' | 'business' | 'tree' | 'treeA6' | 'luxury' | 'gradient' | 'tet' | 'nature' | 'ocean' | 'royal' | 'midautumn' | 'plain'
 
 export const TEMPLATES: { id: Template; label: string; hint: string }[] = [
   { id: 'standard', label: 'Chuẩn', hint: 'Thẻ trắng, logo ngân hàng phía trên' },
@@ -10,6 +10,7 @@ export const TEMPLATES: { id: Template; label: string; hint: string }[] = [
   { id: 'minimal', label: 'Tối giản', hint: 'Không nền, chỉ tên ngân hàng nhỏ' },
   { id: 'business', label: 'Doanh nghiệp', hint: 'Đầu thẻ màu thương hiệu, NV hỗ trợ trong khung riêng' },
   { id: 'tree', label: 'Cây Vàng Lộc Phát', hint: 'Nền vàng, cây tiền vàng bên trái, mã trên khung trắng bên phải' },
+  { id: 'treeA6', label: 'Cây Kim Tiền — A6 dọc', hint: 'Khổ A6 dọc 105 × 148 mm để in; cùng cây vàng với mẫu Cây Vàng Lộc Phát (khổ ngang)' },
   { id: 'luxury', label: 'Vàng Sang Trọng', hint: 'Nền nâu đen, chữ và viền vàng' },
   { id: 'gradient', label: 'Gradient Hiện Đại', hint: 'Nền chuyển màu xanh ngọc sang tím' },
   { id: 'tet', label: 'Tết Lộc Phát', hint: 'Đỏ và vàng ngày Tết, đèn lồng và đồng tiền vàng' },
@@ -344,6 +345,67 @@ export function layoutCard(input: CardInput): Card {
   const strong = onColor(brand.primary) === '#FFFFFF' ? brand.primary : shade(brand.primary, -0.45)
 
   const theme = panelTheme(template, brand, strong)
+  if (template === 'treeA6') {
+    // khổ A6 dọc 105 × 148 mm: chiều cao cố định, nội dung căn giữa theo chiều dọc
+    const AW = 1050
+    const AH = 1480
+    const acx = AW / 2
+    const px = 370
+    const pw = 640
+    const pcx = px + pw / 2
+    const build = (y0: number) => {
+      nodes.length = 0
+      nodes.push({ t: 'grad', x: 0, y: 0, w: AW, h: AH, r: 44, from: '#FBE9A6', to: '#D9A21B' })
+      nodes.push({ t: 'rect', x: 5, y: 5, w: AW - 10, h: AH - 10, r: 40, fill: 'none', stroke: BROWN, sw: 6 })
+      y = y0
+      if (brand.logo) {
+        const l = logoBox(brand.logo, 340, 76)
+        nodes.push({ t: 'rect', x: acx - l.w / 2 - 28, y, w: l.w + 56, h: 108, r: 26, fill: '#FFFFFF' })
+        nodes.push({ t: 'img', x: acx - l.w / 2, y: y + 54 - l.h / 2, w: l.w, h: l.h, src: brand.logo.src })
+        y += 108 + 20
+      }
+      const name = brand.fullName ?? brand.name
+      const words = name.split(' ')
+      if (measure(name, 40, 700) <= 930 || words.length < 4) text(name, acx, 46, 700, BROWN, 'middle', 930, 0.5)
+      else {
+        let cut = 1
+        const half = measure(name, 42, 700) / 2
+        for (let i = 1; i < words.length; i++)
+          if (Math.abs(measure(words.slice(0, i).join(' '), 42, 700) - half) < Math.abs(measure(words.slice(0, cut).join(' '), 42, 700) - half)) cut = i
+        text(words.slice(0, cut).join(' '), acx, 42, 700, BROWN, 'middle', 930, 0.3)
+        text(words.slice(cut).join(' '), acx, 42, 700, BROWN, 'middle', 930, 0.5)
+      }
+      nodes.push({ t: 'rect', x: acx - 80, y, w: 160, h: 8, r: 4, fill: BROWN })
+      y += 8 + 30
+      const top = y
+      const panel: Node = { t: 'rect', x: px, y: top, w: pw, h: 0, r: 36, fill: '#FFFFFF', stroke: '#C99A1E', sw: 3 }
+      nodes.push(panel)
+      y += 26
+      if (input.account) text(input.account, pcx, body, 700, '#A97600', 'middle', pw - 60, 0.35)
+      if (input.title) text(input.title, pcx, body, 700, BROWN, 'middle', pw - 60, 0.4)
+      y += 6
+      nodes.push({ t: 'qr', x: px + 40, y, size: pw - 80 })
+      y += pw - 80 + 14
+      if (input.amount) text(input.amount, pcx, body, 700, BROWN, 'middle', pw - 60, 0.4)
+      if (input.marks) {
+        marksRow(nodes, input.marks, pcx, y, 60)
+        y += 60
+      }
+      y += 26
+      panel.h = y - top
+      const treeH = Math.min(y - top, 720)
+      nodes.push(...moneyTree(34, y - treeH, 310, treeH - 6))
+      if (staff.length) {
+        y += 30
+        for (const line of staff) text(line, acx, staffSize, 600, BROWN, 'middle', 940)
+        y -= 4
+      }
+      return y
+    }
+    const used = build(0)
+    build(Math.max(44, (AH - used) / 2))
+    return { w: AW, h: AH, nodes }
+  }
   if (template === 'tree') {
     const bg: Node = { t: 'grad', x: 0, y: 0, w: W, h: 0, r: 44, from: '#FBE9A6', to: '#D9A21B' }
     const border: Node = { t: 'rect', x: 5, y: 5, w: W - 10, h: 0, r: 40, fill: 'none', stroke: BROWN, sw: 6 }

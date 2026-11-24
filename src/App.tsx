@@ -612,7 +612,7 @@ export default function App() {
                   onClick={() => {
                     setChoice((c) => ({ ...c, template: t.id }))
                     // mẫu Cây Vàng: mặc định đặt logo ngân hàng vào giữa mã (vẫn tắt được ở mục Logo)
-                    if (t.id === 'tree' && style.logo === 'none' && bankStyle.logo) patchStyle({ logo: bankStyle.code === 'LPB' ? 'lpbank' : 'bank', ec: 'H' })
+                    if ((t.id === 'tree' || t.id === 'treeA6') && style.logo === 'none' && bankStyle.logo) patchStyle({ logo: bankStyle.code === 'LPB' ? 'lpbank' : 'bank', ec: 'H' })
                   }}
                 >
                   {t.label}

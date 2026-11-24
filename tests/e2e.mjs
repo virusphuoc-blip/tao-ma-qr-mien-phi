@@ -231,7 +231,7 @@ assert.equal(await page.locator('#clear-staff').count(), 0)
 log('thông tin cán bộ: còn sau khi tải lại trang, nút Xóa xóa sạch')
 
 const footer = (await page.textContent('footer')).replace(/\s+/g, ' ')
-assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.0'))
+assert.ok(footer.includes('© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.1'))
 assert.doesNotMatch(footer, /không phải sản phẩm|Công cụ miễn phí/)
 assert.equal((await page.textContent('#promo')).replace(/\s+/g, ' ').trim(), 'Mở TK LPBank miễn phí: liên hệ ngay VH Phước Zalo 0988474228')
 assert.equal(await page.getAttribute('#promo', 'href'), 'https://zalo.me/0988474228')
@@ -261,7 +261,7 @@ await page.fill('#content', 'Tiền ăn trưa')
 await page.click('[data-size="1024"]')
 const lp = await payload()
 assert.equal(lp, vietqr)
-for (const tpl of ['tree', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'royal', 'midautumn']) {
+for (const tpl of ['tree', 'treeA6', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'royal', 'midautumn']) {
   await page.click(`[data-template-btn="${tpl}"]`)
   await fillStaff(staffFull)
   assert.equal(await payload(), lp)
@@ -275,11 +275,30 @@ for (const tpl of ['tree', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'roya
   const svgFile = await download('#dl-svg', 'svg')
   const svg = readFileSync(svgFile, 'utf8')
   assert.equal(decodeSvg(svgFile), lp)
-  const ratio = sizeOf(svg, 'NV hỗ trợ: Trần Thị B[^<]*') / sizeOf(svg, tpl === 'tree' ? '0123456789' : 'LPBank · 0123456789')
+  const ratio = sizeOf(svg, 'NV hỗ trợ: Trần Thị B[^<]*') / sizeOf(svg, tpl.startsWith('tree') ? '0123456789' : 'LPBank · 0123456789')
   assert.ok(ratio >= 0.6 && ratio <= 0.7, `${tpl}: chữ NV hỗ trợ phải bằng 60–70% chữ nội dung (đang ${ratio})`)
   assert.doesNotMatch(svg, PAGE_ONLY)
   assert.doesNotMatch(svg, /href="(?!data:)/, tpl + ': thẻ không được tham chiếu tệp ngoài')
-  if (tpl !== 'tree') {
+  if (tpl === 'treeA6') {
+    // v1.4.1: khổ A6 dọc 105 × 148 mm, cùng cây vàng, tên đầy đủ dưới logo, chữ không tràn
+    assert.ok(Math.abs(full.height / full.width - 148 / 105) < 0.002, 'A6 dọc: PNG phải đúng tỉ lệ 105 × 148, đang ' + full.width + '×' + full.height)
+    assert.match(svg, /viewBox="0 0 1050 1480"/)
+    assert.ok(/<text x="525"[^>]*font-size="(4\d)"[^>]*>Ngân hàng TMCP Lộc Phát Việt Nam<\/text>/.test(svg), 'A6: thiếu tên đầy đủ dưới logo')
+    assert.ok(svg.includes('>NGUYEN VAN A</text>') && svg.includes('>0123456789</text>'))
+    assert.equal((svg.match(/<image /g) ?? []).length, 4)
+    assert.ok((svg.match(/<path /g) ?? []).length > 80, 'A6: cây vàng phải được vẽ bằng path')
+    assert.ok(near(png, '#F5C542', 30) > 0.01, 'A6: thiếu màu vàng')
+    const out = await page.evaluate(() => {
+      const c = document.querySelector('#qr-preview > svg').getBoundingClientRect()
+      const ts = [...document.querySelectorAll('#qr-preview > svg text')].map((e) => e.getBoundingClientRect())
+      const clash = ts.some((a, i) => ts.some((b, j) => j > i && a.left < b.right && b.left < a.right && a.top < b.bottom - 1 && b.top < a.bottom - 1))
+      return { over: ts.filter((r) => r.left < c.left + 4 || r.right > c.right - 4 || r.top < c.top || r.bottom > c.bottom).length, clash, n: ts.length }
+    })
+    assert.ok(out.n >= 4 && out.over === 0 && !out.clash, 'A6: chữ tràn hoặc chèn nhau ' + JSON.stringify(out))
+    const big = decodePng(await (async () => { await page.click('[data-size="2048"]'); const f = await download('#dl-png', 'png'); await page.click('[data-size="1024"]'); return f })())
+    assert.equal(big.text, lp)
+    assert.equal(big.width, 2048)
+  } else if (tpl !== 'tree') {
     // v1.2.1: dòng dưới logo LPBank là tên đầy đủ, một dòng, không bị cắt, nằm gọn trong thẻ
     const m = /<text x="500"[^>]*font-size="(\d+)"[^>]*>Ngân hàng TMCP Lộc Phát Việt Nam<\/text>/.exec(svg)
     assert.ok(m && Number(m[1]) >= 36, tpl + ': thiếu dòng "Ngân hàng TMCP Lộc Phát Việt Nam" dưới logo')
@@ -304,7 +323,10 @@ for (const tpl of ['tree', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'roya
   const empty = decodePng(emptyPng)
   assert.equal(empty.text, lp)
   assert.doesNotMatch(readFileSync(await download('#dl-svg', 'svg'), 'utf8'), /NV hỗ trợ|Trần Thị B|null|undefined/)
-  assert.ok(full.height > empty.height + 20, tpl + ': thẻ có NV hỗ trợ phải cao hơn')
+  if (tpl === 'treeA6') {
+    assert.equal(empty.height, full.height, 'A6: khổ giấy cố định, không đổi theo NV hỗ trợ')
+    copyFileSync(emptyPng, `${OUT}/card-treeA6-empty.png`)
+  } else assert.ok(full.height > empty.height + 20, tpl + ': thẻ có NV hỗ trợ phải cao hơn')
   log(`mẫu ${tpl}: xem trước ở 390px, PNG + SVG quét đúng payload, "NV hỗ trợ:" cỡ ${Math.round(ratio * 100)}%; bỏ trống thì không có (cao ${full.height} → ${empty.height}px)`)
 }
 await page.click('[data-template-btn="bank"]')
@@ -331,7 +353,7 @@ await page.selectOption('#bank', '970403')
 const treeStb = readFileSync(await download('#dl-svg', 'svg'), 'utf8')
 assert.ok(!treeStb.includes('LỘC PHÁT') && treeStb.includes('>Sacombank</text>'), 'Cây Vàng: ngân hàng khác phải hiện tên ngân hàng đó thay khẩu hiệu LPBank')
 await page.selectOption('#bank', '970449')
-assert.equal((await page.locator('[data-template-btn]').count()), 13)
+assert.equal((await page.locator('[data-template-btn]').count()), 14)
 log('mẫu Cây Vàng: khẩu hiệu LPBank chỉ hiện với LPBank, Sacombank hiện "Sacombank"')
 
 // 1d. v1.2: card visit
@@ -573,7 +595,7 @@ for (const [name, [userAgent, app, how]] of Object.entries(INAPP)) {
 log('thông báo trình duyệt trong ứng dụng: hiện với Zalo / Facebook / Messenger (Android + iPhone), đóng được; không hiện với Chrome, Safari, Cốc Cốc')
 
 // 4d. v1.3: footer bản quyền + phiên bản ở mọi màn hình, SEO, sitemap, robots
-const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.0'
+const COPY = '© 2026 VH Phước. Mọi nội dung thuộc về VH Phước. Tạo Mã QR Miễn Phí v1.4.1'
 for (const nav of ['#nav-qr', '#nav-card', '#nav-admin']) {
   await page.click(nav)
   assert.ok((await page.textContent('footer')).replace(/\s+/g, ' ').includes(COPY), nav + ': thiếu footer bản quyền')

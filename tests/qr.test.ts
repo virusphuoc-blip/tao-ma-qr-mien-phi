@@ -167,7 +167,7 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     expect(staffLines({ branch: 'Chi nhánh Thành phố Hồ Chí Minh – PGD Bến Thành', name: 'Nguyễn Hoàng Thị Phương Thảo', phone: '0901234567' }, 860, 26)).toHaveLength(2)
   })
 
-  it('cả 12 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
+  it('cả 13 mẫu thẻ xuất SVG quét lại đúng payload, có hay không có thông tin cán bộ', () => {
     const payload = buildVietQR({ bin: '970403', account: '0123456789', amount: '100000', content: 'Tien an trua' })
     const model = buildModel(payload, DEFAULT_STYLE)
     const brand = { name: 'Sacombank', primary: '#0065A4', accent: '#F3B643' }
@@ -180,7 +180,7 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
         if (id !== 'tet') expect(svg.includes('>NV hỗ trợ: Trần Thị B — CN Sài Gòn — 0901234567</text>'), id).toBe(!!staff.name)
         expect(svg.includes('NV hỗ trợ'), id).toBe(!!staff.name)
         const sizes = (re: RegExp) => [...svg.matchAll(re)].map((m) => Number(m[1]))
-        const bodySize = Math.max(...sizes(id === 'tree' ? /font-size="(\d+)"[^>]*>0123456789</g : /font-size="(\d+)"[^>]*>Sacombank · 0123456789</g))
+        const bodySize = Math.max(...sizes(id === 'tree' || id === 'treeA6' ? /font-size="(\d+)"[^>]*>0123456789</g : /font-size="(\d+)"[^>]*>Sacombank · 0123456789</g))
         if (staff.name) {
           const ratio = sizes(/font-size="(\d+)"[^>]*>NV hỗ trợ/g)[0] / bodySize
           expect(ratio, id).toBeGreaterThanOrEqual(0.6)
@@ -191,8 +191,8 @@ describe('v1.1: phong cách ngân hàng + thẻ QR', async () => {
     }
   })
 
-  it('v1.2: có đủ 12 mẫu thẻ + "Chỉ mã QR"; Cây Vàng vẽ bằng path, khẩu hiệu chỉ khi được truyền vào', () => {
-    expect(TEMPLATES.map((t) => t.id)).toEqual(['standard', 'bank', 'minimal', 'business', 'tree', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'royal', 'midautumn', 'plain'])
+  it('v1.2: có đủ 13 mẫu thẻ + "Chỉ mã QR"; Cây Vàng vẽ bằng path, khẩu hiệu chỉ khi được truyền vào', () => {
+    expect(TEMPLATES.map((t) => t.id)).toEqual(['standard', 'bank', 'minimal', 'business', 'tree', 'treeA6', 'luxury', 'gradient', 'tet', 'nature', 'ocean', 'royal', 'midautumn', 'plain'])
     const model = buildModel('x', DEFAULT_STYLE)
     const staff = { branch: '', name: '', phone: '' }
     const tree = (tagline?: string) =>
